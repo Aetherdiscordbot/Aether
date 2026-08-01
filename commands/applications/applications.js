@@ -18,9 +18,9 @@ module.exports = {
   options: [
     sub('create', 'Create an application form', [
       str('title', 'Application title', req()),
-      str('description', 'Description shown on the panel', {}),
       str('questions', 'Questions, separated by "|" (max 5)', req()),
       channel('review_channel', 'Channel where submissions are sent', req({ channel_types: [0] })),
+      str('description', 'Description shown on the panel', {}),
       role('role', 'Role granted on approval', {}),
     ]),
     sub('delete', 'Delete an application form', [str('id', 'Application ID', req())]),

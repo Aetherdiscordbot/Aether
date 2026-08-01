@@ -11,7 +11,7 @@ const commandHandler = require('../handlers/commandHandler');
 const chalk = require('chalk');
 
 module.exports = {
-  name: 'ready',
+  name: 'clientReady',
   once: true,
   run(client) {
     premiumService.setClient(client);
