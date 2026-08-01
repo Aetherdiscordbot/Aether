@@ -343,8 +343,9 @@ async function ensurePremiumRole(guild) {
 }
 
 /**
- * Resolve a member by Discord ID first, then by username.
- * Handles legacy "name#1234" and "@handle" input formats.
+ * Resolve a member by Discord ID first, then by identity string.
+ * Accepts usernames, display names, nicknames, tags ("name#1234"),
+ * and "@handle" input. Matches case-insensitively.
  */
 async function resolveMember(guild, userId, username) {
   if (userId) {
@@ -353,18 +354,43 @@ async function resolveMember(guild, userId, username) {
   }
   if (!username) return null;
 
-  const normalized = String(username).replace(/^@/, '').split('#')[0].toLowerCase();
+  const normalized = normalizeIdentity(username);
   if (!normalized) return null;
 
-  const cached = guild.members.cache.find((m) => m.user.username.toLowerCase() === normalized);
+  const cached = findMemberByIdentity(guild, normalized);
   if (cached) return cached;
 
   try {
     const fetched = await guild.members.fetch();
-    return fetched.find((m) => m.user.username.toLowerCase() === normalized) || null;
+    return findMemberByIdentity(guild, normalized) || null;
   } catch {
     return null;
   }
+}
+
+/** Lowercase, strip "@" and any "#1234" suffix. */
+function normalizeIdentity(value) {
+  return String(value || '')
+    .replace(/^@/, '')
+    .split('#')[0]
+    .trim()
+    .toLowerCase();
+}
+
+/** Match a member by username, global display name, or guild nickname. */
+function findMemberByIdentity(guild, normalized) {
+  for (const member of guild.members.cache.values()) {
+    const identities = [
+      member.user.username,
+      member.user.globalName,
+      member.user.displayName,
+      member.nickname,
+    ]
+      .filter(Boolean)
+      .map((v) => String(v).toLowerCase());
+    if (identities.includes(normalized)) return member;
+  }
+  return null;
 }
 
 /** Re-scan pending grants that mention a now-available guild. */
@@ -403,6 +429,7 @@ module.exports = {
   grantPremium,
   revokePremium,
   processPending,
+  fulfillGrant,
   syncMembershipGrantedFromDiscord,
   ensureMainGuildBranding,
   ensurePremiumRole,
