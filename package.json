@@ -8,6 +8,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "allowScripts": {
+    "better-sqlite3": true
+  },
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
