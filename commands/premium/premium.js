@@ -72,6 +72,11 @@ module.exports = {
 };
 
 async function info(interaction) {
+  const { commands, subcommands } = require('../../config/premiumCommands').describe();
+  const premiumLines = [
+    ...commands.map((c) => `• ${c} (full command)`),
+    ...subcommands.map((s) => `• ${s}`),
+  ];
   const embed = baseEmbed({
     color: Colors.premium,
     title: '✨ Aether Premium',
@@ -80,6 +85,8 @@ async function info(interaction) {
       `**Price: ${PRICE}**\n\n` +
       '**What you get:**\n' +
       FEATURES.map((f) => `• ${f}`).join('\n') +
+      '\n\n**Premium commands:**\n' +
+      (premiumLines.length ? premiumLines.join('\n') : 'All commands are free.') +
       `\n\n**How it works:**\n1. Buy at [${config.whop.checkoutUrl}](${config.whop.checkoutUrl})\n2. Enter your **Discord Username** and **Discord Server ID** at checkout\n3. Premium is applied automatically the moment payment completes\n\n_Need help? Contact Aether support._`,
     footer: { text: 'Aether Premium' },
   });

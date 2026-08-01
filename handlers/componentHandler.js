@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../services/logger');
+const { errorEmbed } = require('../utils/discord');
 
 const buttons = new Map();
 const selectMenus = new Map();
@@ -64,7 +65,7 @@ async function safeRun(client, interaction, component) {
   } catch (err) {
     logger.error(`Component ${component.id} failed: ${err.stack || err.message}`);
     const reply = {
-      content: '⚠️ Something went wrong processing that interaction.',
+      embeds: [errorEmbed('Something went wrong processing that interaction.')],
       ephemeral: true,
     };
     if (!interaction.replied && !interaction.deferred) await interaction.reply(reply).catch(() => {});

@@ -4,7 +4,7 @@
 const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const ticketService = require('../modules/tickets/ticketService');
 const premiumService = require('../services/premium');
-const { errorEmbed, successEmbed } = require('../utils/discord');
+const { errorEmbed, successEmbed, infoEmbed } = require('../utils/discord');
 
 module.exports = {
   id: 'ticket',
@@ -40,7 +40,7 @@ module.exports = {
         const transcript = await ticketService.generateTranscript(interaction.channel);
         const buffer = Buffer.from(transcript.text, 'utf8');
         return interaction.reply({
-          content: '📄 Here is the current transcript:',
+          embeds: [infoEmbed('Here is the current transcript.')],
           files: [{ name: `transcript-${interaction.channel.id}.txt`, attachment: buffer }],
           ephemeral: true,
         });

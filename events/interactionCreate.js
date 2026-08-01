@@ -5,13 +5,14 @@
 const logger = require('../services/logger');
 const commandHandler = require('../handlers/commandHandler');
 const componentHandler = require('../handlers/componentHandler');
+const { errorEmbed } = require('../utils/discord');
 
 module.exports = {
   name: 'interactionCreate',
   run(client, interaction) {
     handle(client, interaction).catch((err) => {
       logger.error(`Interaction handling error: ${err.stack || err.message}`);
-      const payload = { content: '⚠️ Something went wrong.', ephemeral: true };
+      const payload = { embeds: [errorEmbed('Something went wrong.')], ephemeral: true };
       if (!interaction.replied && !interaction.deferred) interaction.reply(payload).catch(() => {});
       else interaction.followUp(payload).catch(() => {});
     });

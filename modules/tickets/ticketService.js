@@ -9,7 +9,7 @@ const settings = require('../../services/settings');
 const logService = require('../../services/logService');
 const premiumService = require('../../services/premium');
 const logger = require('../../services/logger');
-const { baseEmbed, Colors, truncate } = require('../../utils/discord');
+const { baseEmbed, Colors, truncate, infoEmbed } = require('../../utils/discord');
 const { timestamp } = require('../../utils/time');
 
 const DEFAULT_CONFIG = {
@@ -264,7 +264,12 @@ async function deliverTranscript(guild, channel, ticket, actor, text, client) {
       ? guild.channels.cache.get(cfg.logChannelId)
       : null;
   if (dest?.isTextBased()) {
-    await dest.send({ content: `Transcript for ${channel} (closed by ${actor})`, files: [attachment] }).catch(() => {});
+    await dest
+      .send({
+        embeds: [infoEmbed(`Transcript for ${channel} (closed by ${actor})`)],
+        files: [attachment],
+      })
+      .catch(() => {});
   }
 }
 

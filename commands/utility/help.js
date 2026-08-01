@@ -2,6 +2,7 @@
  * /help — list all commands grouped by category.
  */
 const commandHandler = require('../../handlers/commandHandler');
+const premiumCommands = require('../../config/premiumCommands');
 const { baseEmbed, Colors } = require('../../utils/discord');
 
 module.exports = {
@@ -17,9 +18,18 @@ module.exports = {
       groups.get(folder).push(cmd);
     }
 
+    const premiumSubs = premiumCommands.subcommands || {};
     const fields = [...groups.entries()].map(([folder, cmds]) => ({
       name: `📁 ${folder.charAt(0).toUpperCase() + folder.slice(1)}`,
-      value: cmds.map((c) => `\`/${c.name}\``).join(' '),
+      value: cmds
+        .map((c) => {
+          const isPremium = premiumCommands.isPremium(c.name);
+          const locked = premiumSubs[c.name]?.length
+            ? ` (🔒 ${premiumSubs[c.name].map((s) => `\`${s}\``).join(' ')} premium)`
+            : '';
+          return isPremium ? `🔒 \`/${c.name}\`` : `\`/${c.name}\`${locked}`;
+        })
+        .join(' '),
       inline: false,
     }));
 
@@ -28,7 +38,7 @@ module.exports = {
         baseEmbed({
           color: Colors.primary,
           title: '✨ Aether Commands',
-          description: `Aether is a premium all-in-one Discord bot.\nUse \`/premium info\` to learn about Premium.\n\n**${commands.length} commands loaded:**`,
+          description: `Aether is a premium all-in-one Discord bot.\n🔒 = Premium feature. Use \`/premium info\` to learn more.\n\n**${commands.length} commands loaded:**`,
           fields,
           footer: { text: 'Aether · Premium Discord bot' },
         }),

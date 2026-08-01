@@ -3,6 +3,7 @@
  */
 const levelingService = require('../../modules/leveling/levelingService');
 const { user, req } = require('../../utils/commandBuilder');
+const { errorEmbed } = require('../../utils/discord');
 
 module.exports = {
   name: 'rank',
@@ -12,7 +13,7 @@ module.exports = {
   async run(client, interaction) {
     const target = interaction.options.getUser('user') || interaction.user;
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
-    if (!member) return interaction.reply({ content: 'User not found in this server.', ephemeral: true });
+    if (!member) return interaction.reply({ embeds: [errorEmbed('User not found in this server.')], ephemeral: true });
     return interaction.reply({ embeds: [levelingService.buildRankEmbed(member)] });
   },
 };

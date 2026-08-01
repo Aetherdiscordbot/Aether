@@ -10,7 +10,7 @@ const config = require('../config/config');
 const logger = require('../services/logger');
 const permissions = require('../services/permissions');
 const premiumService = require('../services/premium');
-const { premiumRequiredEmbed } = require('../utils/discord');
+const { premiumRequiredEmbed, errorEmbed } = require('../utils/discord');
 
 const commands = new Map(); // name -> command module
 const cooldowns = new Map(); // "user:command" -> timestamp
@@ -103,13 +103,13 @@ async function dispatch(client, interaction) {
 
   // ── DM guard ───────────────────────────────────────────────────────────
   if (!isContextMenu && command.dm !== true && !interaction.inGuild()) {
-    return interaction.reply({ content: 'This command must be used in a server.', ephemeral: true });
+    return interaction.reply({ embeds: [errorEmbed('This command must be used in a server.')], ephemeral: true });
   }
 
   // ── Owner-only commands ────────────────────────────────────────────────
   if (command.ownerOnly && !permissions.isOwner(interaction.member || interaction.user)) {
     return interaction.reply({
-      embeds: [require('../utils/discord').errorEmbed('Only the bot owner can use this command.')],
+      embeds: [errorEmbed('Only the bot owner can use this command.')],
       ephemeral: true,
     });
   }
@@ -117,7 +117,7 @@ async function dispatch(client, interaction) {
   // ── Owner-only subcommands ─────────────────────────────────────────────
   if (subName && command.ownerOnlySubcommands?.includes(subName) && !permissions.isOwner(interaction.member || interaction.user)) {
     return interaction.reply({
-      embeds: [require('../utils/discord').errorEmbed('Only the bot owner can use this command.')],
+      embeds: [errorEmbed('Only the bot owner can use this command.')],
       ephemeral: true,
     });
   }
@@ -129,11 +129,7 @@ async function dispatch(client, interaction) {
 
   if (!permissions.hasPermissions(member, requiredPerms)) {
     return interaction.reply({
-      embeds: [
-        require('../utils/discord').errorEmbed(
-          `You need ${formatPerms(requiredPerms)} to use this command.`
-        ),
-      ],
+      embeds: [errorEmbed(`You need ${formatPerms(requiredPerms)} to use this command.`)],
       ephemeral: true,
     });
   }
@@ -142,18 +138,17 @@ async function dispatch(client, interaction) {
     const botMember = interaction.guild.members.me;
     if (!permissions.botHasPermissions(botMember, command.botPermissions)) {
       return interaction.reply({
-        embeds: [
-          require('../utils/discord').errorEmbed(
-            `I need ${formatPerms(command.botPermissions)} for this to work.`
-          ),
-        ],
+        embeds: [errorEmbed(`I need ${formatPerms(command.botPermissions)} for this to work.`)],
         ephemeral: true,
       });
     }
   }
 
   // ── Premium gate ───────────────────────────────────────────────────────
-  if (command.premium && interaction.inGuild()) {
+  // Whole-command premium (registry) or premium subcommand (registry).
+  const premiumCommands = require('../config/premiumCommands');
+  const premiumSub = subName ? premiumCommands.isPremium(command.name, subName) : false;
+  if ((premiumCommands.isPremium(command.name) || premiumSub) && interaction.inGuild()) {
     if (!premiumService.isPremium(interaction.guildId)) {
       return interaction.reply({ embeds: [premiumRequiredEmbed()], ephemeral: true });
     }
@@ -166,11 +161,7 @@ async function dispatch(client, interaction) {
     const remaining = last + command.cooldown * 1000 - Date.now();
     if (remaining > 0) {
       return interaction.reply({
-        embeds: [
-          require('../utils/discord').errorEmbed(
-            `Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`
-          ),
-        ],
+        embeds: [errorEmbed(`Please wait ${Math.ceil(remaining / 1000)}s before using this command again.`)],
         ephemeral: true,
       });
     }
@@ -182,7 +173,7 @@ async function dispatch(client, interaction) {
   } catch (err) {
     logger.error(`Command /${command.name} failed: ${err.stack || err.message}`);
     const reply = {
-      embeds: [require('../utils/discord').errorEmbed('Something went wrong while running that command.')],
+      embeds: [errorEmbed('Something went wrong while running that command.')],
       ephemeral: true,
     };
     if (!interaction.replied && !interaction.deferred) await interaction.reply(reply).catch(() => {});

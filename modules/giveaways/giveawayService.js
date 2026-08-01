@@ -114,7 +114,13 @@ async function endGiveaway(client, id, manual = false) {
   if (channel?.isTextBased()) {
     const message = await channel.send({ embeds: [embed] });
     if (winners.length && channel.send) {
-      await channel.send({ content: `Congratulations ${winners.map((w) => `<@${w.id}>`).join(', ')}! You won **${giveaway.prize}**!` });
+      await channel.send({
+        embeds: [
+          successEmbed(
+            `${winners.map((w) => `<@${w.id}>`).join(', ')} — congratulations! You won **${giveaway.prize}**!`
+          ),
+        ],
+      });
     }
     return { message, winners, giveaway };
   }
@@ -142,7 +148,9 @@ async function reroll(client, id) {
   if (!pool.length) return null;
 
   const winner = pool[Math.floor(Math.random() * pool.length)];
-  await channel.send({ content: `🎉 Rerolled winner for **${giveaway.prize}**: <@${winner.id}>!` });
+  await channel.send({
+    embeds: [successEmbed(`Rerolled winner for **${giveaway.prize}**: <@${winner.id}>!`)],
+  });
   return winner;
 }
 
