@@ -1,0 +1,26 @@
+{
+  "name": "aether",
+  "version": "1.0.0",
+  "description": "Aether - a premium all-in-one Discord bot with Whop-powered premium subscriptions",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:webhook": "node scripts/test-webhook.js"
+  },
+  "dependencies": {
+    "@whop/sdk": "^0.0.42",
+    "axios": "^1.19.0",
+    "better-sqlite3": "^11.10.0",
+    "chalk": "^4.1.2",
+    "discord.js": "^14.27.0",
+    "dotenv": "^16.6.1",
+    "node-cron": "^3.0.3",
+    "winston": "^3.19.0"
+  }
+}
