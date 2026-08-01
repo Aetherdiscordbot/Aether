@@ -1,22 +1,43 @@
 /**
- * SQLite database layer built on better-sqlite3.
- * Single connection (better-sqlite3 is synchronous, so this is safe).
+ * SQLite database layer built on node:sqlite (DatabaseSync).
+ * Single connection (DatabaseSync is synchronous, so this is safe).
  * WAL mode + busy timeout for concurrent readers/writers.
+ *
+ * Uses Node's built-in SQLite so no native install scripts / prebuilt
+ * binaries are required (hosting panels that block npm install scripts
+ * install this cleanly).
  */
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const config = require('../config/config');
 const logger = require('../services/logger');
 
 const dir = path.dirname(config.dbPath);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-const db = new Database(config.dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-db.pragma('busy_timeout = 5000');
-db.pragma('foreign_keys = ON');
+const db = new DatabaseSync(config.dbPath, {
+  timeout: 5000,
+  enableForeignKeyConstraints: true,
+});
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA synchronous = NORMAL');
+db.exec('PRAGMA busy_timeout = 5000');
+
+/** Runs fn inside a transaction, rolling back on error. Mirrors DatabaseSync-style transactions. */
+function transaction(fn) {
+  return (...args) => {
+    db.exec('BEGIN');
+    try {
+      const result = fn(...args);
+      db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  };
+}
 
 const MIGRATIONS = [
   require('./schema'),
@@ -37,7 +58,7 @@ function migrate() {
       .get(migration.version);
     if (applied) continue;
 
-    db.transaction(() => {
+    transaction(() => {
       migration.up(db);
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
         migration.version,

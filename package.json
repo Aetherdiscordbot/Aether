@@ -6,10 +6,7 @@
   "license": "UNLICENSED",
   "private": true,
   "engines": {
-    "node": ">=22.0.0"
-  },
-  "allowScripts": {
-    "better-sqlite3": true
+    "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node index.js",
@@ -19,7 +16,6 @@
   "dependencies": {
     "@whop/sdk": "^0.0.42",
     "axios": "^1.19.0",
-    "better-sqlite3": "^11.10.0",
     "chalk": "^4.1.2",
     "discord.js": "^14.27.0",
     "dotenv": "^16.6.1",
