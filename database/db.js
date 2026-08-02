@@ -41,6 +41,7 @@ function transaction(fn) {
 
 const MIGRATIONS = [
   require('./schema'),
+  require('./schema-v2'),
 ];
 
 /** Applies all migrations in order, tracking applied versions. */

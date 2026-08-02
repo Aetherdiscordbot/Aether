@@ -52,6 +52,10 @@ ${chalk.hex('#8b5cf6').bold('  └───────────────�
     const giveawayService = require('../modules/giveaways/giveawayService');
     scheduler.interval(15_000, () => giveawayService.processGiveaways(client), 'giveaways');
 
+    // Close timed polls.
+    const pollService = require('../services/polls');
+    scheduler.interval(20_000, () => pollService.processDue(client), 'polls');
+
     // Prune expired premium rows periodically.
     scheduler.interval(6 * 60 * 60 * 1000, pruneExpiredPremium, 'premium-expiry-prune');
 

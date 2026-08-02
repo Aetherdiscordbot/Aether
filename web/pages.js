@@ -6,6 +6,24 @@
 const { esc, shortId, layout, alert } = require('./views');
 const config = require('../config/config');
 
+const MODULE_ICONS = {
+  ticket: '🎫',
+  leveling: '📈',
+  economy: '🪙',
+  verification: '✅',
+  suggestions: '💡',
+  security: '🛡️',
+  automod: '🤖',
+  logging: '📋',
+  welcome: '👋',
+  applications: '📝',
+  backup: '💾',
+  embed: '🧩',
+  giveaway: '🎉',
+  react: '🔘',
+  staff: '⭐',
+};
+
 /** Render the server list: circular icons, manageable servers first. */
 function serverList({ user, guilds }) {
   const manage = guilds.filter((g) => g.manage);
@@ -48,45 +66,54 @@ function serverList({ user, guilds }) {
 /** Render a single server's overview: premium status + module states. */
 function serverOverview({ user, guild, modules, premium, premiumServers }) {
   const icon = guild.iconUrl
-    ? `<img src="${esc(guild.iconUrl)}" alt="" style="width:64px;height:64px;border-radius:14px;vertical-align:middle">`
+    ? `<img src="${esc(guild.iconUrl)}" alt="">`
     : '';
   const isActive = premium?.active === true;
-  const premiumCard = isActive
-    ? `<div class="card">
-         <h3>✦ Premium active</h3>
-         <div class="grid">
-           <div class="stat"><span class="label">Plan</span><span class="value">${esc(premium.plan || 'premium')}</span></div>
-           <div class="stat"><span class="label">Activated</span><span class="value">${esc((premium.activated_at || '').slice(0, 10))}</span></div>
-           <div class="stat"><span class="label">Expires</span><span class="value">${esc((premium.expires_at || 'never').slice(0, 10))}</span></div>
-           <div class="stat"><span class="label">Membership</span><span class="value mono">${esc(shortId(premium.membership_id))}</span></div>
-         </div>
-         ${premiumServers.length > 1 ? transferForm({ guildId: guild.id, premiumServers }) : '<p class="muted">Premium can be transferred to another server you own from your <a href="/dashboard">server list</a>.</p>'}
-       </div>`
-    : premium
-      ? `<div class="card">
-           <h3>Premium expired</h3>
-           <p class="muted">This server's premium subscription has expired. Premium modules are locked until it's renewed.</p>
-           <a class="btn" href="${esc(config.whop.checkoutUrl || '/premium')}" target="_blank" rel="noopener">Renew Premium</a>
-         </div>`
-      : `<div class="card">
-           <h3>Free plan</h3>
-           <p class="muted">This server is on the free tier. Some modules require Aether Premium.</p>
-           <a class="btn" href="/premium">Upgrade to Premium</a>
-         </div>`;
+
+  let premiumCard;
+  if (isActive) {
+    premiumCard = `
+      <div class="premium-hero">
+        <h3>✦ Premium active</h3>
+        <div class="stats">
+          <div class="stat"><span class="label">Plan</span><span class="value">${esc(premium.plan || 'premium')}</span></div>
+          <div class="stat"><span class="label">Activated</span><span class="value">${esc((premium.activated_at || '').slice(0, 10))}</span></div>
+          <div class="stat"><span class="label">Expires</span><span class="value">${esc((premium.expires_at || 'never').slice(0, 10))}</span></div>
+          <div class="stat"><span class="label">Membership</span><span class="value mono">${esc(shortId(premium.membership_id))}</span></div>
+        </div>
+        ${premiumServers.length > 1 ? transferForm({ guildId: guild.id, premiumServers }) : '<p class="muted">Premium can be transferred to another server you own from your <a href="/dashboard">server list</a>.</p>'}
+      </div>`;
+  } else if (premium) {
+    premiumCard = `
+      <div class="premium-hero" style="border-color:rgba(248,113,113,.4)">
+        <h3 style="color:var(--error)">✦ Premium expired</h3>
+        <p class="muted">This server's premium subscription has expired. Premium modules are locked until it's renewed.</p>
+        <a class="btn" href="${esc(config.whop.checkoutUrl || '/premium')}" target="_blank" rel="noopener">Renew Premium</a>
+      </div>`;
+  } else {
+    premiumCard = `
+      <div class="premium-hero">
+        <h3>Free plan</h3>
+        <p class="muted">This server is on the free tier. Some modules require Aether Premium.</p>
+        <a class="btn" href="/premium">Upgrade to Premium</a>
+      </div>`;
+  }
 
   const moduleCards = modules
     .map((m) => {
       const state = m.enabled ? '<span class="badge on">On</span>' : '<span class="badge off">Off</span>';
       const gate = m.premium && !isActive
-        ? '<span class="badge off">Premium</span>'
+        ? '<span class="badge premium">Premium</span>'
         : '';
       const disabled = m.premium && !isActive;
-      return `<div class="card"${disabled ? ' style="opacity:.55"' : ''}>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <h3 style="margin:0">${esc(m.name)}</h3>${state}${gate}
+      return `<div class="card module-card${disabled ? ' locked' : ''}">
+        <div class="mc-top">
+          <span class="mc-ico">${esc(MODULE_ICONS[m.key] || '🧩')}</span>
+          <span style="display:flex;gap:6px;align-items:center">${state}${gate}</span>
         </div>
-        <p class="muted" style="font-size:13px;margin-top:8px">${esc(m.description)}</p>
-        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">${disabled ? 'Locked' : 'Configure'}</a>
+        <span class="mc-name">${esc(m.name)}</span>
+        <p>${esc(m.description)}</p>
+        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">${disabled ? '🔒 Locked' : 'Configure'}</a>
       </div>`;
     })
     .join('');
@@ -96,7 +123,13 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
       <a href="/dashboard">‹ Back to servers</a>
       <a class="active" href="/dashboard/${guild.id}">Overview</a>
     </div>
-    <h2>${icon} ${esc(guild.name)} <span class="muted mono">${esc(guild.id)}</span></h2>
+    <div class="guild-header">
+      ${icon}
+      <div>
+        <div class="gh-name">${esc(guild.name)}</div>
+        <div class="gh-id">${esc(guild.id)}</div>
+      </div>
+    </div>
     ${premiumCard}
     <h3>Modules</h3>
     <div class="grid">${moduleCards}</div>`;
@@ -111,18 +144,20 @@ function moduleConfig({ user, guild, module: mod, config, channels, roles, error
   const body = `
     <div class="tabbar">
       <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
-      <a class="active" href="/dashboard/${guild.id}/modules/${esc(mod.key)}">${esc(mod.name)}</a>
+      <a class="active" href="/dashboard/${guild.id}/modules/${esc(mod.key)}">${esc(MODULE_ICONS[mod.key] || '🧩')} ${esc(mod.name)}</a>
     </div>
     ${err}
     <h2>${esc(mod.name)} configuration</h2>
     <p class="muted">${esc(mod.description)}</p>
-    <form method="post" action="/dashboard/${guild.id}/modules/${esc(mod.key)}">
-      ${fields}
-      <div style="display:flex;gap:10px">
-        <button class="btn" type="submit">Save</button>
-        <a class="btn secondary" href="/dashboard/${guild.id}">Cancel</a>
-      </div>
-    </form>`;
+    <div class="card" style="max-width:680px">
+      <form method="post" action="/dashboard/${guild.id}/modules/${esc(mod.key)}">
+        ${fields}
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button class="btn" type="submit">Save changes</button>
+          <a class="btn secondary" href="/dashboard/${guild.id}">Cancel</a>
+        </div>
+      </form>
+    </div>`;
   return layout({ title: `${mod.name} · ${guild.name}`, user, content: body });
 }
 
@@ -212,7 +247,7 @@ function transferForm({ guildId, premiumServers }) {
     .join('');
   if (!options) return '';
   return `
-    <hr style="border-color:var(--border);margin:18px 0">
+    <hr>
     <h3 style="font-size:15px">Transfer premium</h3>
     <form method="post" action="/dashboard/${guildId}/premium/transfer" style="display:flex;gap:10px;align-items:end">
       <div class="field" style="flex:1;margin:0">

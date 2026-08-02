@@ -1,12 +1,13 @@
 /**
- * /poll — create a poll with up to 10 options.
+ * /poll — create a poll.
+ * Free: 2–10 options, one vote each.
+ * Premium: anonymous, role-only voting, multiple votes, timed auto-close.
  */
-const { randomUUID } = require('crypto');
-const db = require('../../database/db');
-const { baseEmbed, Colors, errorEmbed } = require('../../utils/discord');
-const { str, req } = require('../../utils/commandBuilder');
-
-const EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+const { errorEmbed, successEmbed, premiumRequiredEmbed } = require('../../utils/discord');
+const premiumService = require('../../services/premium');
+const polls = require('../../services/polls');
+const { parseDuration } = require('../../utils/time');
+const { str, bool, role, req } = require('../../utils/commandBuilder');
 
 module.exports = {
   name: 'poll',
@@ -15,6 +16,10 @@ module.exports = {
   options: [
     str('question', 'Poll question', req()),
     str('options', 'Options separated by "|" (2–10)', req()),
+    bool('anonymous', 'Hide who created the poll (premium)', {}),
+    bool('multi', 'Allow voting on multiple options (premium)', {}),
+    role('role', 'Only this role can vote (premium)', {}),
+    str('duration', 'Auto-close after e.g. 10m, 2h, 1d (premium)', {}),
   ],
   async run(client, interaction) {
     const question = interaction.options.getString('question');
@@ -26,34 +31,57 @@ module.exports = {
     if (options.length < 2) return interaction.reply({ embeds: [errorEmbed('Provide at least 2 options.')], ephemeral: true });
     if (options.length > 10) return interaction.reply({ embeds: [errorEmbed('Maximum 10 options.')], ephemeral: true });
 
-    const lines = options.map((o, i) => `${EMOJIS[i]} ${o}`).join('\n');
+    const anonymous = interaction.options.getBoolean('anonymous');
+    const multi = interaction.options.getBoolean('multi');
+    const requiredRole = interaction.options.getRole('role');
+    const durationStr = interaction.options.getString('duration');
+
+    const isPremium = premiumService.isPremium(interaction.guildId);
+    const usesPremium = anonymous || multi || requiredRole || durationStr;
+    if (usesPremium && !isPremium) {
+      return interaction.reply({ embeds: [premiumRequiredEmbed()], ephemeral: true });
+    }
+
+    let endsAt = null;
+    if (durationStr) {
+      const ms = parseDuration(durationStr);
+      if (!ms) return interaction.reply({ embeds: [errorEmbed('Invalid duration. Use e.g. `10m`, `2h`, `1d`.')], ephemeral: true });
+      endsAt = new Date(Date.now() + ms);
+    }
+
+    const lines = options.map((o, i) => `${polls.EMOJIS[i]} ${o}`).join('\n');
     const message = await interaction.channel.send({
       embeds: [
-        baseEmbed({
-          color: Colors.primary,
+        require('../../utils/discord').baseEmbed({
+          color: require('../../utils/discord').Colors.primary,
           title: `📊 ${question}`,
-          description: lines,
-          footer: { text: `Poll by ${interaction.user.username}` },
+          description: lines + (endsAt ? `\n\n⏰ **Closes:** ${require('../../utils/time').timestamp(endsAt.toISOString())}` : ''),
+          footer: {
+            text: anonymous
+              ? `${multi ? 'Multiple votes allowed. ' : 'One vote per person. '}${requiredRole ? 'Role-locked. ' : ''}Anonymous poll.`
+              : `${multi ? 'Multiple votes allowed. ' : 'One vote per person. '}Poll by ${interaction.user.username}`,
+          },
         }),
       ],
     });
 
     for (let i = 0; i < options.length; i++) {
-      await message.react(EMOJIS[i]).catch(() => {});
+      await message.react(polls.EMOJIS[i]).catch(() => {});
     }
 
-    const id = randomUUID();
-    db.prepare('INSERT INTO polls (id, guild_id, channel_id, message_id, question, options, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-      id,
-      interaction.guildId,
-      interaction.channel.id,
-      message.id,
+    polls.createPoll({
+      guildId: interaction.guildId,
+      channelId: interaction.channel.id,
+      messageId: message.id,
       question,
-      JSON.stringify(options),
-      interaction.user.id,
-      new Date().toISOString()
-    );
+      options,
+      createdBy: interaction.user.id,
+      anonymous,
+      roleRequired: requiredRole?.id,
+      multi,
+      endsAt,
+    });
 
-    return interaction.reply({ embeds: [require('../../utils/discord').successEmbed('Poll created.')], ephemeral: true });
+    return interaction.reply({ embeds: [successEmbed('Poll created.')], ephemeral: true });
   },
 };

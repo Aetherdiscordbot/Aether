@@ -93,21 +93,39 @@ function buildRouter(getClient, opts = {}) {
 
   // ── Public: landing ────────────────────────────────────────────────────
   router.get('/', (req, res) => {
+    const cmdCount = require('../handlers/commandHandler').commands.size;
+    const moduleCount = modules.MODULES.length;
     res.send(
       layout({
         title: 'Home',
         user: currentUser(req),
         content: `
         <div class="hero">
-          <h1>🪐 The <span>Aether</span> bot</h1>
-          <p>One premium all-in-one Discord bot — tickets, leveling, economy, automod, suggestions, giveaways and more.</p>
+          <div class="chip">🪐 All-in-one Discord bot</div>
+          <h1>One bot to run your<br><span class="grad">entire server</span></h1>
+          <p>Leveling, economy, tickets, automod, giveaways, verification and more — with a premium plan that covers every module on one server.</p>
           <div class="cta">
-            <a class="btn" href="/invite">Invite Aether</a>
+            <a class="btn" href="/invite">Add to Discord</a>
             <a class="btn secondary" href="/dashboard">Open dashboard</a>
           </div>
+          <div class="stats">
+            <div class="stat"><span class="value">${moduleCount}</span><span class="label">Modules</span></div>
+            <div class="stat"><span class="value">${cmdCount}+</span><span class="label">Commands</span></div>
+            <div class="stat"><span class="value">100%</span><span class="label">Free to start</span></div>
+          </div>
         </div>
+        <div class="section-title">Everything your server needs</div>
+        <p class="section-sub">Fully configurable from the dashboard — no coding required.</p>
         <div class="grid">
           ${features}
+        </div>
+        <div class="hero" style="padding-top:40px">
+          <h2 style="margin-bottom:10px">Ready to level up?</h2>
+          <p style="max-width:480px">Invite Aether to your server and open the dashboard. Free modules work instantly — upgrade any time.</p>
+          <div class="cta">
+            <a class="btn" href="/invite">Invite Aether</a>
+            <a class="btn secondary" href="/premium">See Premium</a>
+          </div>
         </div>`,
       })
     );
@@ -122,22 +140,39 @@ function buildRouter(getClient, opts = {}) {
 
   // ── Public: premium info ───────────────────────────────────────────────
   router.get('/premium', (req, res) => {
+    const prem = require('../config/premiumCommands');
+    const premiumCmds = prem.commands.map((c) => `/${c}`);
+    const premiumSubs = Object.entries(prem.subcommands)
+      .filter(([, subs]) => subs && subs.length)
+      .map(([name, subs]) => `/${name} — ${subs.join(', ')}`);
     res.send(
       layout({
         title: 'Premium',
         user: currentUser(req),
         content: `
         <div class="hero">
-          <h1>✦ Aether <span>Premium</span></h1>
-          <p>Unlock the full toolkit for one server.</p>
+          <div class="chip">✦ Premium</div>
+          <h1>Unlock the <span class="grad">full toolkit</span></h1>
+          <p>One subscription covers every module on one server. Transferable to any server you own.</p>
         </div>
-        <div class="grid">
-          <div class="card"><h3>✨ Premium servers</h3><p class="muted">Tickets, applications, security, automod, logging, backup, embed and giveaways.</p></div>
-          <div class="card"><h3>⚙️ Premium modules</h3><p class="muted">Economy, leveling, suggestions, verification, welcome and reaction-role setup.</p></div>
-          <div class="card"><h3>🔗 Transferable</h3><p class="muted">Move your premium to another server you own — right from the dashboard.</p></div>
-        </div>
-        <div style="text-align:center;margin-top:24px">
+        <div class="pricing">
+          <div class="chip" style="margin-bottom:4px">Aether Premium</div>
+          <div class="price">$${(config.whop.price || '5.99')}</div>
+          <div class="per">per month · one server</div>
+          <ul>
+            <li><span class="tick">✓</span> All premium modules on <b>one server</b></li>
+            <li><span class="tick">✓</span> Transfer to another server anytime</li>
+            <li><span class="tick">✓</span> Automatic activation via Whop</li>
+            <li><span class="tick">✓</span> Cancel anytime, keep servers until expiry</li>
+          </ul>
           ${config.whop.checkoutUrl && config.whop.checkoutUrl !== 'https://whop.com' ? `<a class="btn" href="${config.whop.checkoutUrl}" target="_blank">Get Premium</a>` : '<p class="muted">Checkout link not configured.</p>'}
+        </div>
+        <div class="section-title">Premium includes</div>
+        <p class="section-sub">${esc(premiumCmds.join(' · '))}</p>
+        <div class="grid">
+          <div class="feature"><div class="icon">✨</div><h4>Premium servers</h4><p>Tickets, applications, security, automod, logging, backup, embed, giveaways and more — full config from the dashboard.</p></div>
+          <div class="feature"><div class="icon">⚙️</div><h4>Premium setup</h4><p>${esc(premiumSubs.join('. ') || '')}</p></div>
+          <div class="feature"><div class="icon">🔗</div><h4>Transferable</h4><p>Move your premium to another server you own — right from the dashboard.</p></div>
         </div>`,
       })
     );
@@ -146,15 +181,34 @@ function buildRouter(getClient, opts = {}) {
   // ── Public: commands list ──────────────────────────────────────────────
   router.get('/commands', (req, res) => {
     const commandHandler = require('../handlers/commandHandler');
-    const cmds = [...commandHandler.commands.values()].map((c) => `/${c.name}`).sort().join(' · ');
+    const prem = require('../config/premiumCommands');
+    const all = [...commandHandler.commands.values()]
+      .map((c) => ({ name: c.name, premium: prem.isPremium(c.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const free = all.filter((c) => !c.premium);
+    const paid = all.filter((c) => c.premium);
+    const pill = (c) => `<span class="pill${c.premium ? ' premium' : ''}">/${esc(c.name)}${c.premium ? ' ✦' : ''}</span>`;
     res.send(
       layout({
         title: 'Commands',
         user: currentUser(req),
         content: `
-        <h2>Commands</h2>
-        <div class="card"><p class="mono">${esc(cmds)}</p></div>
-        <p class="muted">Use /help in your server for details. Some commands require Premium.</p>`,
+        <div class="hero" style="padding:48px 0 30px">
+          <div class="chip">Slash commands</div>
+          <h1>Command <span class="grad">library</span></h1>
+          <p>Everything Aether can do — free and premium.</p>
+        </div>
+        <div class="card">
+          <h3>✦ Premium commands</h3>
+          <p class="muted">Require Aether Premium on the server.</p>
+          <div class="tag-row">${paid.map(pill).join('')}</div>
+        </div>
+        <div class="card">
+          <h3>Free commands</h3>
+          <p class="muted">Available to every server.</p>
+          <div class="tag-row">${free.map(pill).join('')}</div>
+        </div>
+        <p class="muted center">Use /help in your server for details on any command.</p>`,
       })
     );
   });
@@ -378,17 +432,17 @@ const esc = (s) =>
     .replace(/"/g, '&quot;');
 
 const features = `
-  <div class="feature"><h4>🎫 Tickets</h4><p>Custom support tickets with claims, transcripts and categories.</p></div>
-  <div class="feature"><h4>📈 Leveling</h4><p>XP, roles and a full leaderboard for active members.</p></div>
-  <div class="feature"><h4>🪙 Economy</h4><p>Currency, daily rewards, work, shop and item inventory.</p></div>
-  <div class="feature"><h4>🛡️ Security</h4><p>Anti-raid, anti-spam, account-age gates and join lockdown.</p></div>
-  <div class="feature"><h4>🤖 Automod</h4><p>Word filters, caps, links, mentions and emoji limits.</p></div>
-  <div class="feature"><h4>🎉 Giveaways</h4><p>Reaction giveaways with winner selection and rerolls.</p></div>
-  <div class="feature"><h4>💡 Suggestions</h4><p>Member suggestions with staff approve/deny.</p></div>
-  <div class="feature"><h4>✅ Verification</h4><p>Verify-button gate with role assignment.</p></div>
-  <div class="feature"><h4>👋 Welcome</h4><p>Welcome/goodbye messages and automatic roles.</p></div>
-  <div class="feature"><h4>📋 Logging</h4><p>Full audit logging across channels.</p></div>
-  <div class="feature"><h4>🗃️ Backup</h4><p>Snapshot and restore your server configuration.</p></div>
-  <div class="feature"><h4>🪐 Premium</h4><p>Everything above, transferred between servers you own.</p></div>`;
+  <div class="feature"><div class="icon">🎫</div><h4>Tickets</h4><p>Custom support tickets with claims, transcripts and categories.</p></div>
+  <div class="feature"><div class="icon">📈</div><h4>Leveling</h4><p>XP, roles and a full leaderboard for active members.</p></div>
+  <div class="feature"><div class="icon">🪙</div><h4>Economy</h4><p>Currency, daily rewards, work, shop and item inventory.</p></div>
+  <div class="feature"><div class="icon">🛡️</div><h4>Security</h4><p>Anti-raid, anti-spam, account-age gates and join lockdown.</p></div>
+  <div class="feature"><div class="icon">🤖</div><h4>Automod</h4><p>Word filters, caps, links, mentions and emoji limits.</p></div>
+  <div class="feature"><div class="icon">🎉</div><h4>Giveaways</h4><p>Reaction giveaways with winner selection and rerolls.</p></div>
+  <div class="feature"><div class="icon">💡</div><h4>Suggestions</h4><p>Member suggestions with staff approve/deny.</p></div>
+  <div class="feature"><div class="icon">✅</div><h4>Verification</h4><p>Verify-button gate with role assignment.</p></div>
+  <div class="feature"><div class="icon">👋</div><h4>Welcome</h4><p>Welcome/goodbye messages and automatic roles.</p></div>
+  <div class="feature"><div class="icon">📋</div><h4>Logging</h4><p>Full audit logging across channels.</p></div>
+  <div class="feature"><div class="icon">🗃️</div><h4>Backup</h4><p>Snapshot and restore your server configuration.</p></div>
+  <div class="feature"><div class="icon">🪐</div><h4>Premium</h4><p>Everything above, transferred between servers you own.</p></div>`;
 
 module.exports = { buildRouter };

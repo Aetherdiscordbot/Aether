@@ -10,11 +10,11 @@ const { formatDuration, timestamp } = require('../../utils/time');
 
 const EMOJI = '🎉';
 
-function createGiveaway({ guildId, channelId, prize, winners, endsAt, hostId, roleRequired }) {
+function createGiveaway({ guildId, channelId, prize, winners, endsAt, hostId, roleRequired, autoReroll }) {
   const id = randomUUID();
   db.prepare(
-    `INSERT INTO giveaways (id, guild_id, channel_id, prize, winners, ends_at, host_id, role_required, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO giveaways (id, guild_id, channel_id, prize, winners, ends_at, host_id, role_required, auto_reroll, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     guildId,
@@ -24,6 +24,7 @@ function createGiveaway({ guildId, channelId, prize, winners, endsAt, hostId, ro
     new Date(endsAt).toISOString(),
     hostId,
     roleRequired || null,
+    autoReroll ? 1 : 0,
     new Date().toISOString()
   );
   return id;
@@ -121,6 +122,13 @@ async function endGiveaway(client, id, manual = false) {
           ),
         ],
       });
+    } else if (!winners.length && giveaway.auto_reroll) {
+      // Auto-reroll: if nobody was eligible the first time, keep the pool and
+      // pick a replacement once more (excluding already-picked).
+      const rerolled = await reroll(client, id);
+      if (rerolled) {
+        await channel.send({ embeds: [successEmbed(`No eligible entries — auto-rerolled: <@${rerolled.id}> wins **${giveaway.prize}**!`)] });
+      }
     }
     return { message, winners, giveaway };
   }

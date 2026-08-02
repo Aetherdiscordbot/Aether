@@ -16,8 +16,6 @@ module.exports = {
     'automod',
     'logging',
     'backup',
-    'embed',
-    'giveaway',
     'ai',
   ],
   subcommands: {
@@ -27,6 +25,9 @@ module.exports = {
     verify: ['setup', 'panel', 'disable'],
     welcome: ['setup', 'disable', 'autorole', 'leave', 'test'],
     react: ['create', 'remove', 'list'],
+    role: ['mass'],
+    nick: ['mass'],
+    embed: ['template-save', 'template-use', 'template-list', 'template-delete'],
   },
 };
 
