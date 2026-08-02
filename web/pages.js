@@ -129,6 +129,7 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
         <div class="gh-name">${esc(guild.name)}</div>
         <div class="gh-id">${esc(guild.id)}</div>
       </div>
+      <a class="btn secondary small" style="margin-left:auto" href="/server/${guild.id}/leaderboard">📈 Public leaderboard</a>
     </div>
     ${premiumCard}
     <h3>Modules</h3>

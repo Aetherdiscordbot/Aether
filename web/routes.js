@@ -11,6 +11,7 @@ const logger = require('../services/logger');
 const authService = require('../services/auth');
 const settings = require('../services/settings');
 const premiumService = require('../services/premium');
+const db = require('../database/db');
 const pages = require('./pages');
 const modules = require('./modules');
 const { layout, alert } = require('./views');
@@ -211,6 +212,87 @@ function buildRouter(getClient, opts = {}) {
         <p class="muted center">Use /help in your server for details on any command.</p>`,
       })
     );
+  });
+
+  // ── Public: server XP leaderboard ──────────────────────────────────────
+  const lbCache = new Map();
+  const defaultAvatar = (userId) => `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(userId) >> 22n) % 6}.png`;
+
+  async function cachedMembers(guild) {
+    const hit = lbCache.get(guild.id);
+    if (hit && Date.now() - hit.ts < 60_000) return hit.members;
+    const members = await guild.members.fetch({ cache: false }).catch(() => new Map());
+    const map = new Map([...members.values()].map((m) => [m.id, m]));
+    lbCache.set(guild.id, { ts: Date.now(), members: map });
+    return map;
+  }
+
+  router.get('/server/:guildId/leaderboard', async (req, res) => {
+    const guildId = String(req.params.guildId || '');
+    if (!/^\d{10,20}$/.test(guildId)) {
+      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Unknown server.') }));
+    }
+
+    const leveling = require('../modules/leveling/levelingService');
+    const rows = db.prepare('SELECT user_id, xp, level FROM xp WHERE guild_id = ?').all(guildId);
+    const ranked = rows
+      .map((r) => ({ ...r, total: leveling.totalXp(guildId, r.user_id) }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 25);
+
+    const client = getClient();
+    const discordGuild = client?.guilds.cache.get(guildId);
+    const members = discordGuild ? await cachedMembers(discordGuild) : new Map();
+
+    const rowsHtml = ranked
+      .map((r, i) => {
+        const member = members.get(r.user_id);
+        const name = member ? (member.nickname || member.user.username) : `User ${r.user_id.slice(-4)}`;
+        const avatar = member
+          ? member.user.displayAvatarURL({ size: 64 })
+          : defaultAvatar(r.user_id);
+        const medal = ['🥇', '🥈', '🥉'][i];
+        const needed = leveling.xpForLevel(r.level);
+        const percent = Math.min(100, Math.max(1, Math.round((r.xp / needed) * 100)));
+        return `<div class="lb-row${medal ? ' top' + (i + 1) : ''}">
+          <div class="lb-rank">${medal || i + 1}</div>
+          <img class="lb-avatar" src="${esc(avatar)}" alt="">
+          <div class="lb-main">
+            <div class="lb-name">${esc(name)} <span class="lb-lvl">Lv ${r.level}</span></div>
+            <div class="lb-bar"><div class="lb-fill" style="width:${percent}%"></div></div>
+            <div class="lb-xp">${r.xp.toLocaleString()} / ${needed.toLocaleString()} XP · ${percent}% to level ${r.level + 1}</div>
+          </div>
+          <div class="lb-total">${r.total.toLocaleString()} XP</div>
+        </div>`;
+      })
+      .join('');
+
+    const guildName = discordGuild ? discordGuild.name : `Server ${guildId}`;
+    const icon = discordGuild?.icon
+      ? `<img class="lb-icon" src="https://cdn.discordapp.com/icons/${guildId}/${discordGuild.icon}.${discordGuild.icon.startsWith('a_') ? 'gif' : 'png'}?size=128" alt="">`
+      : `<span class="lb-icon" style="display:grid;place-items:center;font-size:28px">🪐</span>`;
+
+    const body = ranked.length
+      ? `
+      <div class="hero" style="padding:48px 0 30px">
+        ${icon}
+        <h1>${esc(guildName)} <span class="grad">Leaderboard</span></h1>
+        <p>Top 25 by total XP — progress bars show how close members are to the next level.</p>
+      </div>
+      <div class="lb-card">${rowsHtml}</div>
+      <p class="muted center" style="margin-top:26px">Want your server here? <a href="/invite">Invite Aether</a> and members earn XP by chatting.</p>`
+      : `
+      <div class="hero" style="padding:48px 0 30px">
+        ${icon}
+        <h1>${esc(guildName)} <span class="grad">Leaderboard</span></h1>
+        <p>No XP data yet for this server.</p>
+      </div>
+      <div class="card" style="max-width:520px;margin:0 auto;text-align:center">
+        <p class="muted">Aether hasn't recorded any XP here yet — invite the bot and enable the leveling module to get started.</p>
+        <a class="btn" href="/invite">Invite Aether</a>
+      </div>`;
+
+    res.send(layout({ title: `${guildName} · Leaderboard`, user: currentUser(req), content: body }));
   });
 
   // ── OAuth: login/callback/logout ───────────────────────────────────────

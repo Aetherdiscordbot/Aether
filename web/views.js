@@ -298,6 +298,35 @@ input[type=checkbox]:checked::after { transform: translateX(18px); background: #
 .section-title { text-align: center; font-size: clamp(26px, 4vw, 34px); margin: 56px 0 10px; }
 .section-sub { text-align: center; color: var(--muted); margin: 0 0 34px; }
 
+/* ── Public leaderboard ─────────────────────────────────────────────── */
+.lb-icon { width: 68px; height: 68px; border-radius: 18px; border: 2px solid var(--border-2); box-shadow: var(--shadow); }
+.lb-card { max-width: 700px; margin: 0 auto; }
+.lb-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px; margin-bottom: 10px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.lb-row:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.lb-row.top1 { border-color: rgba(241,196,15,.45); background: linear-gradient(160deg, rgba(241,196,15,.1), rgba(139,92,246,.06)); }
+.lb-row.top2 { border-color: rgba(203,213,225,.35); }
+.lb-row.top3 { border-color: rgba(196,137,94,.4); }
+.lb-rank { width: 40px; text-align: center; font-size: 20px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+.lb-avatar { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--border-2); flex-shrink: 0; }
+.lb-main { flex: 1; min-width: 0; }
+.lb-name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-lvl {
+  font-size: 12px; font-weight: 600; color: #fcd34d;
+  border: 1px solid rgba(241,196,15,.4); background: rgba(241,196,15,.08);
+  padding: 2px 8px; border-radius: 999px;
+}
+.lb-bar { height: 8px; background: rgba(255,255,255,.08); border-radius: 999px; margin: 7px 0 4px; overflow: hidden; }
+.lb-fill { height: 100%; border-radius: 999px; background: var(--grad); }
+.lb-xp { font-size: 12px; color: var(--muted); }
+.lb-total { font-weight: 700; color: var(--muted); white-space: nowrap; font-size: 14px; }
+.lb-hero-icon { display: inline-block; }
+
 /* ── Premium page ──────────────────────────────────────────────────── */
 .pricing {
   max-width: 520px; margin: 0 auto;
