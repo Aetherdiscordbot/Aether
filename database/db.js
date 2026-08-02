@@ -20,7 +20,15 @@ const db = new DatabaseSync(config.dbPath, {
   timeout: 5000,
   enableForeignKeyConstraints: true,
 });
-db.exec('PRAGMA journal_mode = WAL');
+
+// WAL mode is faster but not supported on all filesystems (e.g., network mounts).
+// Fall back to DELETE journal mode if WAL fails.
+try {
+  db.exec('PRAGMA journal_mode = WAL');
+} catch (e) {
+  logger.warn(`WAL mode not supported, falling back to DELETE: ${e.message}`);
+  db.exec('PRAGMA journal_mode = DELETE');
+}
 db.exec('PRAGMA synchronous = NORMAL');
 db.exec('PRAGMA busy_timeout = 5000');
 
