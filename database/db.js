@@ -29,6 +29,12 @@ try {
   logger.warn(`WAL mode not supported, falling back to DELETE: ${e.message}`);
   db.exec('PRAGMA journal_mode = DELETE');
 }
+// Checkpoint WAL on startup to keep disk usage bounded.
+try {
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+} catch (e) {
+  logger.debug(`WAL checkpoint skipped: ${e.message}`);
+}
 db.exec('PRAGMA synchronous = NORMAL');
 db.exec('PRAGMA busy_timeout = 5000');
 
