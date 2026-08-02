@@ -2,10 +2,12 @@
  * ?setupserver — one-shot server builder (owner-only prefix command).
  *
  * Creates the staff/support roles, the recommended channel layout with
- * permission gates, then wires the created channels into the module
+ * emoji-prefixed categories and channels plus explicit text/voice
+ * permission overrides, then wires the created channels into the module
  * settings (tickets -> BOT & SUPPORT, logging -> #audit-log). Everything
- * is idempotent: existing roles/channels are reused by name, never
- * duplicated. Not registered as a slash command.
+ * is idempotent: existing roles/channels are reused by name (unprefixed
+ * channels from older runs are renamed in place), never duplicated. Not
+ * registered as a slash command.
  */
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { baseEmbed, errorEmbed, Colors } = require('../utils/discord');
@@ -18,16 +20,75 @@ const ROLES = [
   { name: 'Support Team', color: '#38bdf8', hoist: true },
 ];
 
-const CATEGORIES = {
-  INFORMATION: ['rules', 'welcome', 'updates', 'announcements', 'changelog'],
-  COMMUNITY: ['general-chat', 'introductions', 'media', 'off-topic'],
-  'BOT & SUPPORT': ['help-and-support', 'commands-guide', 'suggestions', 'bug-reports'],
-  PREMIUM: ['premium-chat', 'premium-support'],
-  'SUPPORT TEAM': ['support-chat', 'support-handbook', 'resolved-archive'],
-  'STAFF TEAM': ['staff-chat', 'audit-log', 'actions'],
-};
+/** Categories: name, emoji prefix, and their text channels [{ name, emoji }]. */
+const CATEGORIES = [
+  {
+    name: 'INFORMATION',
+    emoji: '📚',
+    channels: [
+      { name: 'rules', emoji: '📜' },
+      { name: 'welcome', emoji: '👋' },
+      { name: 'updates', emoji: '📣' },
+      { name: 'announcements', emoji: '📢' },
+      { name: 'changelog', emoji: '📝' },
+    ],
+  },
+  {
+    name: 'COMMUNITY',
+    emoji: '🌐',
+    channels: [
+      { name: 'general-chat', emoji: '💬' },
+      { name: 'introductions', emoji: '🤝' },
+      { name: 'media', emoji: '🖼️' },
+      { name: 'off-topic', emoji: '☕' },
+    ],
+  },
+  {
+    name: 'BOT & SUPPORT',
+    emoji: '🛎️',
+    channels: [
+      { name: 'help-and-support', emoji: '🎫' },
+      { name: 'commands-guide', emoji: '⌨️' },
+      { name: 'suggestions', emoji: '💡' },
+      { name: 'bug-reports', emoji: '🐛' },
+    ],
+  },
+  {
+    name: 'PREMIUM',
+    emoji: '👑',
+    channels: [
+      { name: 'premium-chat', emoji: '✨' },
+      { name: 'premium-support', emoji: '👑' },
+    ],
+  },
+  {
+    name: 'SUPPORT TEAM',
+    emoji: '🎧',
+    channels: [
+      { name: 'support-chat', emoji: '🎧' },
+      { name: 'support-handbook', emoji: '📖' },
+      { name: 'resolved-archive', emoji: '🗃️' },
+    ],
+  },
+  {
+    name: 'STAFF TEAM',
+    emoji: '🛡️',
+    channels: [
+      { name: 'staff-chat', emoji: '🛡️' },
+      { name: 'audit-log', emoji: '📋' },
+      { name: 'actions', emoji: '⚡' },
+    ],
+  },
+];
 
-const VOICE_CHANNELS = ['General', 'Chill Corner', 'Music Room'];
+const VOICE = { name: 'VOICE', emoji: '🔊' };
+
+/** Voice channels: [{ name, emoji }] under the VOICE category. */
+const VOICE_CHANNELS = [
+  { name: 'General', emoji: '🔊' },
+  { name: 'Chill Corner', emoji: '🌿' },
+  { name: 'Music Room', emoji: '🎵' },
+];
 
 /** Category -> role names allowed to see it (everyone else is hidden). */
 const GATED = {
@@ -36,10 +97,45 @@ const GATED = {
   'STAFF TEAM': ['Staff Team'],
 };
 
+const fullChannelName = (def) => `【${def.emoji}】${def.name}`;
+const fullCategoryName = (def) => `【${def.emoji}】${def.name.toLowerCase()}`;
+
 const findRole = (guild, name) => guild.roles.cache.find((r) => r.name.toLowerCase() === String(name).toLowerCase());
 const findChannel = (guild, name) => guild.channels.cache.find((c) => c.name.toLowerCase() === String(name).toLowerCase());
 const findCategory = (guild, name) =>
-  guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === String(name).toLowerCase());
+  guild.channels.cache.find(
+    (c) => c.type === ChannelType.GuildCategory && (c.name.toLowerCase() === name.toLowerCase() || c.name.toLowerCase().endsWith(name.toLowerCase()))
+  );
+
+/** Overrides that hide a category (and its children) behind roles. */
+function gateOverrides(guild, catName) {
+  const overrides = [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }];
+  for (const roleName of GATED[catName] || []) {
+    const role = findRole(guild, roleName);
+    if (role) overrides.push({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+  }
+  if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages] });
+  return overrides;
+}
+
+/** Explicit perms for a text channel: public ones open, gated ones inherit the gate. */
+function textPerms(guild, catName) {
+  if (GATED[catName]) return gateOverrides(guild, catName);
+  const overrides = [
+    { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages] },
+  ];
+  if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages] });
+  return overrides;
+}
+
+/** Explicit perms for a voice channel: everyone can join and talk. */
+function voicePerms(guild) {
+  const overrides = [
+    { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.UseVoiceActivity] },
+  ];
+  if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.Connect] });
+  return overrides;
+}
 
 module.exports = {
   name: 'setupserver',
@@ -55,7 +151,7 @@ module.exports = {
     }
 
     const guild = message.guild;
-    const summary = { roles: [], categories: [], channels: [], gates: [], wired: [], skipped: [] };
+    const summary = { roles: [], categories: [], channels: [], renamed: [], gates: [], wired: [], skipped: [] };
     await message.channel.sendTyping().catch(() => {});
 
     try {
@@ -79,62 +175,82 @@ module.exports = {
       }
 
       // ── Categories + text channels ──────────────────────────────────────
-      for (const [catName, channels] of Object.entries(CATEGORIES)) {
-        let category = findCategory(guild, catName);
+      for (const cat of CATEGORIES) {
+        const fullCat = fullCategoryName(cat);
+        let category = findCategory(guild, fullCat) || findCategory(guild, cat.name);
         if (!category) {
-          category = await guild.channels.create({ name: catName.toLowerCase(), type: ChannelType.GuildCategory, reason: 'Aether ?setupserver' });
-          summary.categories.push(catName);
+          category = await guild.channels.create({ name: fullCat, type: ChannelType.GuildCategory, reason: 'Aether ?setupserver' });
+          summary.categories.push(fullCat);
+        } else if (category.name !== fullCat) {
+          await category.setName(fullCat, 'Aether ?setupserver');
+          summary.renamed.push(`Category ${cat.name} -> ${fullCat}`);
         } else {
-          summary.skipped.push(`Category ${catName} (already exists)`);
+          summary.skipped.push(`Category ${fullCat} (already exists)`);
         }
-        for (const ch of channels) {
-          if (findChannel(guild, ch)) {
-            summary.skipped.push(`#${ch} (already exists)`);
+        if (GATED[cat.name]) {
+          await category.permissionOverwrites.set(gateOverrides(guild, cat.name), 'Aether ?setupserver');
+          summary.gates.push(cat.name);
+        }
+        for (const def of cat.channels) {
+          const full = fullChannelName(def);
+          const existing = findChannel(guild, full) || findChannel(guild, def.name);
+          if (existing) {
+            if (existing.name !== full) {
+              await existing.setName(full, 'Aether ?setupserver');
+              summary.renamed.push(`#${def.name} -> ${full}`);
+            } else {
+              summary.skipped.push(`${full} (already exists)`);
+            }
             continue;
           }
-          await guild.channels.create({ name: ch, type: ChannelType.GuildText, parent: category.id, reason: 'Aether ?setupserver' });
-          summary.channels.push(`#${ch}`);
+          await guild.channels.create({
+            name: full,
+            type: ChannelType.GuildText,
+            parent: category.id,
+            permissionOverwrites: textPerms(guild, cat.name),
+            reason: 'Aether ?setupserver',
+          });
+          summary.channels.push(full);
         }
       }
 
       // ── Voice category + channels ───────────────────────────────────────
-      let voiceCat = findCategory(guild, 'voice');
+      const fullVoiceCat = fullCategoryName(VOICE);
+      let voiceCat = findCategory(guild, fullVoiceCat) || findCategory(guild, VOICE.name);
       if (!voiceCat) {
-        voiceCat = await guild.channels.create({ name: 'voice', type: ChannelType.GuildCategory, reason: 'Aether ?setupserver' });
-        summary.categories.push('voice');
+        voiceCat = await guild.channels.create({ name: fullVoiceCat, type: ChannelType.GuildCategory, reason: 'Aether ?setupserver' });
+        summary.categories.push(fullVoiceCat);
+      } else if (voiceCat.name !== fullVoiceCat) {
+        await voiceCat.setName(fullVoiceCat, 'Aether ?setupserver');
+        summary.renamed.push(`Category ${VOICE.name} -> ${fullVoiceCat}`);
       }
-      for (const vc of VOICE_CHANNELS) {
-        if (findChannel(guild, vc) || findChannel(guild, vc.toLowerCase().replace(/[^a-z0-9]+/g, '-'))) {
-          summary.skipped.push(`Voice ${vc} (already exists)`);
+      for (const def of VOICE_CHANNELS) {
+        const full = fullChannelName(def);
+        const slug = def.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const existing = findChannel(guild, full) || findChannel(guild, def.name) || findChannel(guild, slug);
+        if (existing) {
+          if (existing.name !== full) {
+            await existing.setName(full, 'Aether ?setupserver');
+            summary.renamed.push(`Voice ${def.name} -> ${full}`);
+          } else {
+            summary.skipped.push(`${full} (already exists)`);
+          }
           continue;
         }
-        await guild.channels.create({ name: vc, type: ChannelType.GuildVoice, parent: voiceCat.id, reason: 'Aether ?setupserver' });
-        summary.channels.push(`Voice ${vc}`);
-      }
-
-      // ── Permission gates (children inherit from their category) ─────────
-      const bot = guild.members.me;
-      for (const [catName, allowedRoleNames] of Object.entries(GATED)) {
-        const category = findCategory(guild, catName);
-        if (!category) continue;
-        const overrides = [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }];
-        for (const roleName of allowedRoleNames) {
-          const role = findRole(guild, roleName);
-          if (role) {
-            overrides.push({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
-          } else {
-            summary.skipped.push(`Gate ${catName}: ${roleName} not found`);
-          }
-        }
-        if (bot) overrides.push({ id: bot.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels] });
-        await category.permissionOverwrites.set(overrides, 'Aether ?setupserver');
-        summary.gates.push(catName);
+        await guild.channels.create({
+          name: full,
+          type: ChannelType.GuildVoice,
+          parent: voiceCat.id,
+          permissionOverwrites: voicePerms(guild),
+          reason: 'Aether ?setupserver',
+        });
+        summary.channels.push(`Voice ${full}`);
       }
 
       // ── Wire module settings ────────────────────────────────────────────
-      const supportCat = findCategory(guild, 'bot & support');
-      const staffCat = findCategory(guild, 'staff team');
-      const auditLog = staffCat ? findChannel(guild, 'audit-log') : null;
+      const supportCat = findCategory(guild, 'BOT & SUPPORT');
+      const staffCat = findCategory(guild, 'STAFF TEAM');
+      const auditLog = staffCat ? findChannel(guild, '【📋】audit-log') || findChannel(guild, 'audit-log') : null;
 
       if (supportCat) {
         const existing = settings.getSetting(guild.id, 'ticket', {});
@@ -155,7 +271,7 @@ module.exports = {
         summary.wired.push('Logging -> #audit-log');
       }
 
-      logger.info(`?setupserver ran in ${guild.id}: +${summary.roles.length} roles, +${summary.categories.length} cats, +${summary.channels.length} channels`);
+      logger.info(`?setupserver ran in ${guild.id}: +${summary.roles.length} roles, +${summary.categories.length} cats, +${summary.channels.length} channels, +${summary.renamed.length} renamed`);
     } catch (err) {
       logger.error(`?setupserver failed in ${guild.id}: ${err.stack || err.message}`);
       return message.channel.send({ embeds: [errorEmbed(`Setup failed partway: ${err.message}`)] });
@@ -166,11 +282,12 @@ module.exports = {
     const embed = baseEmbed({
       color: Colors.success,
       title: 'Server setup complete',
-      description: 'The server layout has been built. Everything is idempotent — run `?setupserver` again to fill in anything still missing.',
+      description: 'The server layout has been built with emoji-prefixed categories and channels plus explicit text/voice permissions. Everything is idempotent — run `?setupserver` again to fill in anything still missing.',
       fields: [
         field('Created roles', summary.roles),
         field('Created categories', summary.categories),
         field('Created channels', summary.channels),
+        field('Renamed channels', summary.renamed),
         field('Permission gates', summary.gates.map((g) => `${g} locked`)),
         field('Wired into modules', summary.wired),
         field('Skipped', summary.skipped),
