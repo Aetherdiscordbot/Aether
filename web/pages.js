@@ -623,4 +623,32 @@ function multiServerPage({ user, guilds, isPremium }) {
   return layout({ title: 'Multi-Server', user, content: body });
 }
 
-module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage };
+/** Full-page error screen: big gradient code, icon, message, back buttons. */
+function errorPage({ status, message, user, back = '/' }) {
+  const meta = ERROR_META[status] || ERROR_META[500];
+  const body = `
+    <div class="error-page">
+      <div class="error-ico">${meta.ico}</div>
+      <div class="error-code">${esc(String(status))}</div>
+      <div class="error-title">${esc(meta.title)}</div>
+      ${message ? `<p class="error-msg">${esc(message)}</p>` : ''}
+      <div class="cta">
+        <a class="btn" href="${esc(back)}">← Back</a>
+        <a class="btn secondary" href="/">Home</a>
+        <a class="btn secondary" href="/dashboard">Dashboard</a>
+      </div>
+    </div>`;
+  return layout({ title: `${status} · ${meta.title}`, user, content: body });
+}
+
+const ERROR_META = {
+  400: { ico: '🤔', title: 'Bad request' },
+  401: { ico: '🔐', title: 'Not signed in' },
+  403: { ico: '⛔', title: 'Forbidden' },
+  404: { ico: '🛸', title: 'Page not found' },
+  500: { ico: '💥', title: 'Something went wrong' },
+  502: { ico: '🌐', title: 'Upstream error' },
+  503: { ico: '🔧', title: 'Temporarily unavailable' },
+};
+
+module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage, errorPage };

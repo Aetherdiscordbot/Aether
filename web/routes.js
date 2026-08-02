@@ -41,7 +41,12 @@ function buildRouter(getClient, opts = {}) {
   function requireOwner(req, res, next) {
     const u = req.session?.user;
     if (u && config.owners.includes(u.id)) return next();
-    return res.status(403).send(layout({ title: 'Forbidden', user: currentUser(req), content: alert('error', 'You are not the bot owner.') }));
+    return errorResponse(req, res, 403, 'You are not the bot owner.', '/dashboard');
+  }
+
+  /** Render a full-page error screen. */
+  function errorResponse(req, res, status, message, back = '/') {
+    res.status(status).send(pages.errorPage({ status, message, user: currentUser(req), back }));
   }
 
   function currentUser(req) {
@@ -237,7 +242,7 @@ function buildRouter(getClient, opts = {}) {
   router.get('/server/:guildId/leaderboard', async (req, res) => {
     const guildId = String(req.params.guildId || '');
     if (!/^\d{10,20}$/.test(guildId)) {
-      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Unknown server.') }));
+      return errorResponse(req, res, 404, 'We could not find that server.', '/');
     }
 
     const leveling = require('../modules/leveling/levelingService');
@@ -306,12 +311,12 @@ function buildRouter(getClient, opts = {}) {
   router.get('/transcript/:guildId/:ticketId', async (req, res) => {
     const { guildId, ticketId } = req.params;
     if (!/^\d{10,20}$/.test(guildId) || !/^[0-9a-f-]{36}$/i.test(ticketId)) {
-      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Transcript not found.') }));
+      return errorResponse(req, res, 404, 'Transcript not found. It may have been deleted.', '/');
     }
     const ticketService = require('../modules/tickets/ticketService');
     const ticket = ticketService.getTranscript(ticketId);
     if (!ticket || ticket.guild_id !== guildId) {
-      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Transcript not found.') }));
+      return errorResponse(req, res, 404, 'Transcript not found. It may have been deleted.', '/');
     }
     const client = getClient();
     const discordGuild = client?.guilds.cache.get(guildId);
@@ -326,9 +331,7 @@ function buildRouter(getClient, opts = {}) {
   // ── OAuth: login/callback/logout ───────────────────────────────────────
   router.get('/login', (req, res) => {
     if (!authService.isConfigured()) {
-      return res
-        .status(503)
-        .send(layout({ title: 'Login unavailable', user: null, content: alert('error', 'OAuth is not configured (missing OAUTH_CLIENT_SECRET / OAUTH_REDIRECT_URI).') }));
+      return errorResponse(req, res, 503, 'OAuth is not configured (missing OAUTH_CLIENT_SECRET / OAUTH_REDIRECT_URI).', '/');
     }
     const state = crypto.randomBytes(16).toString('hex');
     req.session.oauthState = state;
@@ -338,13 +341,13 @@ function buildRouter(getClient, opts = {}) {
   router.get('/auth/callback', async (req, res) => {
     const { code, state, error } = req.query;
     if (error) {
-      return res.send(layout({ title: 'Login failed', user: null, content: alert('error', `Discord auth error: ${error}`) }));
+      return errorResponse(req, res, 500, `Discord auth error: ${error}`, '/login');
     }
     if (!state || state !== req.session.oauthState) {
-      return res.status(400).send(layout({ title: 'Login failed', user: null, content: alert('error', 'Invalid OAuth state. Try logging in again.') }));
+      return errorResponse(req, res, 400, 'Invalid OAuth state. Try logging in again.', '/login');
     }
     if (!code) {
-      return res.status(400).send(layout({ title: 'Login failed', user: null, content: alert('error', 'Missing authorization code.') }));
+      return errorResponse(req, res, 400, 'Missing authorization code.', '/login');
     }
     try {
       const tokens = await authService.exchangeCode(code);
@@ -365,7 +368,7 @@ function buildRouter(getClient, opts = {}) {
       res.redirect('/dashboard');
     } catch (err) {
       logger.error(`OAuth callback failed: ${err.message}`);
-      res.status(502).send(layout({ title: 'Login failed', user: null, content: alert('error', 'Could not complete login with Discord. Please try again.') }));
+      errorResponse(req, res, 502, 'Could not complete login with Discord. Please try again.', '/login');
     }
   });
 
@@ -385,7 +388,7 @@ function buildRouter(getClient, opts = {}) {
     const user = currentUser(req);
     const guilds = await manageableGuilds(user);
     if (!guilds.some((g) => premiumService.isPremium(g.id))) {
-      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This view requires Aether Premium on at least one of your servers.') }));
+      return errorResponse(req, res, 403, 'This view requires Aether Premium on at least one of your servers.', '/dashboard');
     }
     const client = getClient();
     const withStats = guilds.map((g) => ({
@@ -403,10 +406,10 @@ function buildRouter(getClient, opts = {}) {
     const user = currentUser(req);
     const guild = user?.guilds?.find((g) => g.id === req.params.guildId);
     if (!guild || !authService.canManageGuild(guild)) {
-      return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
     }
     if (!premiumService.isPremium(guild.id)) {
-      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This tab requires Aether Premium on this server.') }));
+      return errorResponse(req, res, 403, 'This tab requires Aether Premium on this server.', `/dashboard/${req.params.guildId}`);
     }
     req.guild = guild;
     req.user = user;
@@ -519,7 +522,7 @@ function buildRouter(getClient, opts = {}) {
     const user = currentUser(req);
     const guild = user.guilds.find((g) => g.id === req.params.guildId);
     if (!guild || !authService.canManageGuild(guild)) {
-      return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
     }
     const premiumRow = premiumService.getPremiumServer(guild.id);
     const premium = premiumRow
@@ -549,14 +552,14 @@ function buildRouter(getClient, opts = {}) {
     const user = currentUser(req);
     const guild = user.guilds.find((g) => g.id === req.params.guildId);
     if (!guild || !authService.canManageGuild(guild)) {
-      return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
     }
     const mod = modules.getModule(req.params.moduleKey);
-    if (!mod) return res.status(404).send(layout({ title: 'Not found', user, content: alert('error', 'Unknown module.') }));
+    if (!mod) return errorResponse(req, res, 404, 'Unknown module.', `/dashboard/${guild.id}`);
 
     const premium = premiumService.isPremium(guild.id);
     if (mod.premium === true && !premium) {
-      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This module requires Aether Premium on this server.') }));
+      return errorResponse(req, res, 403, 'This module requires Aether Premium on this server.', `/dashboard/${guild.id}`);
     }
 
     const client = getClient();
@@ -583,13 +586,13 @@ function buildRouter(getClient, opts = {}) {
     const user = currentUser(req);
     const guild = user.guilds.find((g) => g.id === req.params.guildId);
     if (!guild || !authService.canManageGuild(guild)) {
-      return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
     }
     const mod = modules.getModule(req.params.moduleKey);
-    if (!mod) return res.status(404).send(layout({ title: 'Not found', user, content: alert('error', 'Unknown module.') }));
+    if (!mod) return errorResponse(req, res, 404, 'Unknown module.', `/dashboard/${guild.id}`);
 
     if (mod.premium === true && !premiumService.isPremium(guild.id)) {
-      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This module requires Aether Premium on this server.') }));
+      return errorResponse(req, res, 403, 'This module requires Aether Premium on this server.', `/dashboard/${guild.id}`);
     }
 
     const parsed = modules.parseModuleConfig(mod, req.body);
@@ -635,18 +638,18 @@ function buildRouter(getClient, opts = {}) {
     const toGuildId = String(req.body.targetGuildId || '').trim();
 
     if (!toGuildId || toGuildId === fromGuildId) {
-      return res.status(400).send(layout({ title: 'Transfer failed', user, content: alert('error', 'Choose a different target server.') }));
+      return errorResponse(req, res, 400, 'Choose a different target server.', `/dashboard/${fromGuildId}`);
     }
 
     const source = user.guilds.find((g) => g.id === fromGuildId);
     const target = user.guilds.find((g) => g.id === toGuildId);
     if (!source || !target || !authService.canManageGuild(source) || !authService.canManageGuild(target)) {
-      return res.status(403).send(layout({ title: 'Transfer failed', user, content: alert('error', 'You must own (or be able to manage) both servers.') }));
+      return errorResponse(req, res, 403, 'You must own (or be able to manage) both servers.', `/dashboard/${fromGuildId}`);
     }
 
     const premiumRow = premiumService.getPremiumServer(fromGuildId);
     if (!premiumRow || !premiumService.isPremium(fromGuildId)) {
-      return res.status(400).send(layout({ title: 'Transfer failed', user, content: alert('error', 'This server does not have active premium.') }));
+      return errorResponse(req, res, 400, 'This server does not have active premium.', `/dashboard/${fromGuildId}`);
     }
 
     try {
@@ -655,7 +658,7 @@ function buildRouter(getClient, opts = {}) {
       res.redirect(`/dashboard/${toGuildId}?transferred=1`);
     } catch (err) {
       logger.error(`Premium transfer failed: ${err.message}`);
-      res.status(400).send(layout({ title: 'Transfer failed', user, content: alert('error', err.message) }));
+      errorResponse(req, res, 400, err.message, `/dashboard/${fromGuildId}`);
     }
   });
 
@@ -718,6 +721,22 @@ function buildRouter(getClient, opts = {}) {
   router.get('/health', (req, res) => {
     const client = getClient();
     res.json({ ok: true, service: 'aether-web', uptime: process.uptime(), discord: Boolean(client?.isReady()) });
+  });
+
+  // ── 404 catch-all ──────────────────────────────────────────────────────
+  router.use((req, res) => {
+    if (req.path.startsWith('/api/') || req.path === '/health') {
+      return res.status(404).json({ ok: false, error: 'Not found' });
+    }
+    errorResponse(req, res, 404, 'The page you are looking for does not exist.', '/');
+  });
+
+  // ── 500 handler ────────────────────────────────────────────────────────
+  router.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    logger.error(`Web error on ${req.method} ${req.path}: ${err.stack || err.message}`);
+    if (req.path.startsWith('/api/')) return res.status(500).json({ ok: false, error: 'Internal error' });
+    errorResponse(req, res, 500, 'Something went wrong while handling your request. Please try again.', '/');
   });
 
   return router;

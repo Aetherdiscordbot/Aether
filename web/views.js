@@ -450,6 +450,18 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 textarea { background: var(--card-2); border: 1px solid var(--border-2); color: var(--text); border-radius: 10px; padding: 10px 12px; font: inherit; width: 100%; box-sizing: border-box; }
 textarea:focus { outline: none; border-color: var(--violet); }
 .badge.warn { background: rgba(248,113,113,.14); color: #fca5a5; }
+
+/* ── Error pages ─────────────────────────────────────────────────────── */
+.error-page { text-align: center; padding: 90px 0 50px; }
+.error-ico { font-size: 44px; margin-bottom: 14px; }
+.error-code {
+  font-family: var(--display); font-size: clamp(72px, 18vw, 120px); font-weight: 800; line-height: 1;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  letter-spacing: -.03em; text-shadow: 0 20px 60px rgba(139, 92, 246, .25);
+}
+.error-title { font-family: var(--display); font-size: 24px; font-weight: 700; margin-top: 14px; }
+.error-msg { color: var(--muted); max-width: 460px; margin: 10px auto 28px; line-height: 1.6; }
+.error-page .cta { display: flex; gap: 10px; justify-content: center; }
 `;
 
 /** Full HTML page around inner content. */
