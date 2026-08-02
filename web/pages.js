@@ -596,6 +596,98 @@ function serverTabs({ guild, active, isPremium }) {
   return `<div class="tabbar">${items.join('')}</div>`;
 }
 
+/** FiveM bridge dashboard page. */
+function fivemPage({ user, guild, config, channels, roles, notice }) {
+  const enabled = config.enabled;
+  const secret = config.secret || '—';
+  const framework = config.framework || 'none';
+  const poll = config.pollInterval || 5;
+  const verifiedRoleId = config.verifiedRole;
+  const announceChannelId = config.announceChannel;
+  const playerFeedChannelId = config.playerFeedChannel;
+  const roleOpts = roles.map((r) => `<option value="${esc(r.id)}"${verifiedRoleId === r.id ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
+  const channelOpts = channels
+    .filter((c) => c.type === 0)
+    .map((c) => `<option value="${esc(c.id)}"${announceChannelId === c.id ? ' selected' : ''}>${esc(c.name)}</option>`)
+    .join('');
+  const feedChannelOpts = channels
+    .filter((c) => c.type === 0)
+    .map((c) => `<option value="${esc(c.id)}"${playerFeedChannelId === c.id ? ' selected' : ''}>${esc(c.name)}</option>`)
+    .join('');
+
+  return layout({
+    title: `FiveM Bridge · ${guild.name}`,
+    user,
+    content: `
+      ${serverTabs({ guild, active: 'fivem', isPremium: true })}
+      <div class="guild-header">
+        <div><div class="gh-name">FiveM Bridge · ${esc(guild.name)}</div><div class="gh-id">connect your game server to Aether</div></div>
+      </div>
+      ${notice ? `<div class="alert success">${esc(notice)}</div>` : ''}
+      <div class="card">
+        <h3>${enabled ? 'Enabled' : 'Disabled'}</h3>
+        <form method="post" action="/dashboard/${guild.id}/fivem" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-top:10px">
+          <input type="hidden" name="action" value="${enabled ? 'disable' : 'enable'}">
+          <button class="btn ${enabled ? 'danger' : ''}" type="submit">${enabled ? 'Disable FiveM' : 'Enable FiveM'}</button>
+        </form>
+        ${!enabled ? '<p class="muted">Enable to generate an API key and see settings.</p>' : ''}
+      </div>
+      ${enabled ? `
+      <div class="card">
+        <h3>API Key</h3>
+        <p class="muted">Copy this into your server's <code>config.lua</code> as <code>Config.Secret</code>. The URL is hardcoded to <code>https://aether.ocrp.cc</code>.</p>
+        <div class="field">
+          <label>Secret (API Key)</label>
+          <input type="text" value="${esc(secret)}" readonly style="font-family:ui-monospace,monospace">
+        </div>
+        <form method="post" action="/dashboard/${guild.id}/fivem" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+          <input type="hidden" name="action" value="rotate">
+          <button class="btn secondary" type="submit">Regenerate Key</button>
+          <a class="btn" href="/dashboard/${guild.id}/fivem/resource.zip">Download Preconfigured Resource</a>
+        </form>
+        <p class="help">Regenerating invalidates the old key immediately. Re-download the resource after rotating.</p>
+      </div>
+      <div class="card">
+        <h3>Settings</h3>
+        <form method="post" action="/dashboard/${guild.id}/fivem" style="display:grid;gap:12px;max-width:720px">
+          <input type="hidden" name="action" value="save">
+          <div class="field">
+            <label>Framework</label>
+            <select name="framework">
+              <option value="none"${framework === 'none' ? ' selected' : ''}>None (money commands disabled)</option>
+              <option value="qbcore"${framework === 'qbcore' ? ' selected' : ''}>QBCore</option>
+              <option value="esx"${framework === 'esx' ? ' selected' : ''}>ESX</option>
+            </select>
+            <p class="help">Required for money add/remove commands. Set to <code>none</code> if unsure.</p>
+          </div>
+          <div class="field">
+            <label>Poll Interval (seconds)</label>
+            <input type="number" name="pollInterval" value="${esc(poll)}" min="3" max="60">
+            <p class="help">How often the resource reports players and fetches commands.</p>
+          </div>
+          <div class="field">
+            <label>Verified Role (granted on /verify)</label>
+            <select name="verifiedRole"><option value="">— None —</option>${roleOpts}</select>
+            <p class="help">Players who link via <code>/verify</code> in-game receive this role.</p>
+          </div>
+          <div class="field">
+            <label>Announcement Channel</label>
+            <select name="announceChannel"><option value="">— None —</option>${channelOpts}</select>
+            <p class="help">Bot posts <code>/server announce</code> messages here (via chat relay).</p>
+          </div>
+          <div class="field">
+            <label>Player Feed Channel</label>
+            <select name="playerFeedChannel"><option value="">— None —</option>${feedChannelOpts}</select>
+            <p class="help">Join/leave events posted here.</p>
+          </div>
+          <button class="btn" type="submit">Save Settings</button>
+        </form>
+      </div>
+      ` : ''}
+    `,
+  });
+}
+
 /** Public status page: component health + live stats. */
 function statusPage({ user, data }) {
   const statCard = (label, value) => `

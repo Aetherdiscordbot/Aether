@@ -88,6 +88,71 @@ function createApp() {
   // before the router so dashboard POST forms are parsed).
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false }));
+
+  // FiveM bridge endpoints (JSON, secret-authenticated).
+  const fivemService = require('../modules/fivem/fivemService');
+
+  app.post('/fivem/heartbeat', (req, res) => {
+    const { secret, guild, players } = req.body;
+    if (!fivemService.verifySecret(guild, secret)) return res.status(401).json({ ok: false, error: 'Invalid secret' });
+    if (players) fivemService.upsertPlayers(guild, players);
+    res.json({ ok: true });
+  });
+
+  app.get('/fivem/config', (req, res) => {
+    const { secret, guild } = req.query;
+    if (!fivemService.verifySecret(guild, secret)) return res.status(401).json({ ok: false, error: 'Invalid secret' });
+    const cfg = fivemService.getConfig(guild);
+    if (!cfg.enabled) return res.status(404).json({ ok: false, error: 'FiveM disabled' });
+    res.json({
+      ok: true,
+      guildId: guild,
+      pollInterval: cfg.pollInterval,
+      framework: cfg.framework,
+      verifiedRole: cfg.verifiedRole,
+      announceChannel: cfg.announceChannel,
+      playerFeedChannel: cfg.playerFeedChannel,
+    });
+  });
+
+  app.get('/fivem/commands', (req, res) => {
+    const { secret, guild } = req.query;
+    if (!fivemService.verifySecret(guild, secret)) return res.status(401).json({ ok: false, error: 'Invalid secret' });
+    const cmds = fivemService.getPendingCommands(guild);
+    res.json(cmds);
+  });
+
+  app.post('/fivem/ack', (req, res) => {
+    const { secret, guild, id } = req.query;
+    if (!fivemService.verifySecret(guild, secret)) return res.status(401).json({ ok: false, error: 'Invalid secret' });
+    fivemService.ackCommand(guild, id, true);
+    res.json({ ok: true });
+  });
+
+  app.post('/fivem/verify', (req, res) => {
+    const { secret, code, license, playerId, name } = req.body;
+    let guild = null;
+    for (const row of require('../database/db').prepare('SELECT guild_id FROM fivem_config WHERE secret = ?').all(secret)) {
+      if (fivemService.verifySecret(row.guild_id, secret)) { guild = row.guild_id; break; }
+    }
+    if (!guild) return res.status(401).json({ ok: false, error: 'Invalid secret' });
+
+    const verify = fivemService.consumeVerifyCode(guild, code);
+    if (!verify.ok) return res.json({ ok: false, error: verify.error });
+
+    fivemService.linkLicense(guild, verify.userId, license, name);
+    const cfg = fivemService.getConfig(guild);
+    if (cfg.verifiedRole) {
+      const client = getClient();
+      const discordGuild = client?.guilds.cache.get(guild);
+      const member = discordGuild?.members.cache.get(verify.userId);
+      if (member && !member.roles.cache.has(cfg.verifiedRole)) {
+        member.roles.add(cfg.verifiedRole, 'FiveM verify link').catch(() => {});
+      }
+    }
+    res.json({ ok: true, name });
+  });
+
   app.use(buildRouter(getClient, { sessionStore }));
 
   // 404 for everything else.

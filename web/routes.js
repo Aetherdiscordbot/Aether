@@ -547,6 +547,79 @@ function buildRouter(getClient, opts = {}) {
     );
   });
 
+  // ── FiveM bridge dashboard ────────────────────────────────────────────────
+  const fivemService = require('../modules/fivem/fivemService');
+
+  router.get('/dashboard/:guildId/fivem', requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const guild = user.guilds.find((g) => g.id === req.params.guildId);
+    if (!guild || !authService.canManageGuild(guild)) {
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
+    }
+    const cfg = fivemService.getConfig(guild.id);
+    const client = getClient();
+    const discordGuild = client?.guilds.cache.get(guild.id);
+    const channels = discordGuild
+      ? [...discordGuild.channels.cache.values()]
+          .map((c) => ({ id: c.id, name: c.name, type: c.type }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [];
+    const roles = discordGuild
+      ? [...discordGuild.roles.cache.values()]
+          .filter((r) => r.id !== discordGuild.id)
+          .map((r) => ({ id: r.id, name: r.name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [];
+    res.send(pages.fivemPage({ user, guild, config: cfg, channels, roles, notice: req.query.ok ? 'Saved.' : req.query.err ? 'Error.' : null }));
+  });
+
+  router.post('/dashboard/:guildId/fivem', requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const guild = user.guilds.find((g) => g.id === req.params.guildId);
+    if (!guild || !authService.canManageGuild(guild)) {
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
+    }
+    const action = req.body.action;
+    if (action === 'enable') {
+      fivemService.setConfig(guild.id, { enabled: true });
+    } else if (action === 'disable') {
+      fivemService.setConfig(guild.id, { enabled: false });
+    } else if (action === 'rotate') {
+      fivemService.rotateSecret(guild.id);
+    } else if (action === 'save') {
+      fivemService.setConfig(guild.id, {
+        framework: req.body.framework || 'none',
+        pollInterval: Math.max(3, parseInt(req.body.pollInterval) || 5),
+        verifiedRole: req.body.verifiedRole || null,
+        announceChannel: req.body.announceChannel || null,
+        playerFeedChannel: req.body.playerFeedChannel || null,
+      });
+    } else {
+      return res.redirect(`/dashboard/${guild.id}/fivem?err=1`);
+    }
+    res.redirect(`/dashboard/${guild.id}/fivem?ok=1`);
+  });
+
+  router.get('/dashboard/:guildId/fivem/resource.zip', requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const guild = user.guilds.find((g) => g.id === req.params.guildId);
+    if (!guild || !authService.canManageGuild(guild)) {
+      return errorResponse(req, res, 403, 'You cannot manage that server.', '/dashboard');
+    }
+    const cfg = fivemService.getConfig(guild.id);
+    if (!cfg.secret) return res.status(400).send('Generate an API key first.');
+    try {
+      const { buildFivemZip } = require('../services/zip');
+      const zip = buildFivemZip(cfg.secret, guild.id);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="aether-fivem.zip"');
+      res.send(zip);
+    } catch (e) {
+      logger.error(`Failed to build FiveM zip: ${e.stack || e.message}`);
+      res.status(500).send('Failed to build zip');
+    }
+  });
+
   // ── Module config GET ──────────────────────────────────────────────────
   router.get('/dashboard/:guildId/modules/:moduleKey', requireAuth, async (req, res) => {
     const user = currentUser(req);
