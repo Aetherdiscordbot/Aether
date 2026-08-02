@@ -39,6 +39,7 @@ async function main() {
 
   const premiumService = require('./services/premium');
   premiumService.setClient(client);
+  webhookServer.setClient(client);
 
   // 4) Load handlers.
   const commandHandler = require('./handlers/commandHandler');

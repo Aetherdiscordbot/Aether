@@ -30,6 +30,17 @@ const config = {
     url: process.env.WEBHOOK_URL || '',
   },
 
+  // Website + dashboard (Discord OAuth2).
+  web: {
+    baseUrl: process.env.BASE_URL || '',
+    sessionSecret: process.env.SESSION_SECRET || '',
+    // Discord OAuth2 app credentials.
+    oauthClientSecret: process.env.OAUTH_CLIENT_SECRET || '',
+    oauthRedirectUri: process.env.OAUTH_REDIRECT_URI || '',
+    // Permissions integer for the bot invite link.
+    invitePermissions: 8,
+  },
+
   whop: {
     apiKey: process.env.WHOP_API_KEY || '',
     webhookSecret: process.env.WHOP_WEBHOOK_SECRET || '',

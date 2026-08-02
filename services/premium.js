@@ -303,6 +303,65 @@ function removeServerPremium(guildId) {
 }
 
 /**
+ * Move an active premium subscription from one server to another.
+ * Preserves the membership, plan, activation date and expiry. The premium
+ * row's membership must belong to the caller (or the caller must be a bot
+ * owner) — callers are verified upstream (dashboard ownership check).
+ */
+function transferServerPremium({ fromGuildId, toGuildId, actorId = null }) {
+  const source = db.prepare('SELECT * FROM premium_servers WHERE guild_id = ?').get(fromGuildId);
+  if (!source) throw new Error('Source server has no premium record.');
+  if (fromGuildId === toGuildId) throw new Error('Source and target servers are the same.');
+
+  const target = db.prepare('SELECT * FROM premium_servers WHERE guild_id = ?').get(toGuildId);
+  if (target) throw new Error('Target server already has a premium record.');
+
+  // If the membership is tied to a Discord buyer, that buyer must be the actor.
+  if (source.membership_id && actorId) {
+    const membership = db
+      .prepare('SELECT * FROM premium_memberships WHERE membership_id = ?')
+      .get(source.membership_id);
+    const owners = new Set([config.owners].flat());
+    const isBotOwner = owners.has(actorId);
+    if (membership?.discord_user_id && membership.discord_user_id !== actorId && !isBotOwner) {
+      throw new Error('This premium belongs to a different Discord account.');
+    }
+  }
+
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM premium_servers WHERE guild_id = ?').run(fromGuildId);
+    db.prepare(
+      `INSERT INTO premium_servers
+         (guild_id, owner_id, whop_customer_id, membership_id, plan, status, whitelisted, activated_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      toGuildId,
+      source.owner_id,
+      source.whop_customer_id,
+      source.membership_id,
+      source.plan,
+      source.status,
+      source.whitelisted,
+      source.activated_at,
+      source.expires_at
+    );
+    if (source.membership_id) {
+      db.prepare('UPDATE premium_memberships SET guild_id = ? WHERE membership_id = ?').run(
+        toGuildId,
+        source.membership_id
+      );
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  logger.info(`Premium transferred: ${fromGuildId} → ${toGuildId} (${source.membership_id || 'whitelisted'})`);
+  return getPremiumServer(toGuildId);
+}
+
+/**
  * A server is premium when it has an active row OR is whitelisted.
  */
 function isPremium(guildId) {
@@ -441,4 +500,5 @@ module.exports = {
   setServerPremium,
   whitelistServer,
   removeServerPremium,
+  transferServerPremium,
 };
