@@ -595,6 +595,38 @@ function serverTabs({ guild, active, isPremium }) {
   return `<div class="tabbar">${items.join('')}</div>`;
 }
 
+/** Public status page: component health + live stats. */
+function statusPage({ user, data }) {
+  const statCard = (label, value) => `
+    <div class="stat-card"><span class="value">${esc(value)}</span><span class="label">${esc(label)}</span></div>`;
+  const up = (ok) => `<span class="badge ${ok ? 'on' : 'off'}">${ok ? 'Operational' : 'Offline'}</span>`;
+  const fmtUptime = (s) => `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h ${Math.floor((s % 3600) / 60)}m ${Math.floor(s % 60)}s`;
+  const healthy = data.discord && data.dbOk;
+  const overall = healthy ? 'All systems operational' : data.discord ? 'Database issue detected' : data.dbOk ? 'Discord gateway offline' : 'Service degraded';
+  const body = `
+    <div class="guild-header" style="max-width:680px;margin:26px auto 22px">
+      <div>
+        <div class="gh-name">${overall}</div>
+        <div class="gh-id">aether.ocrp.cc · status · v${esc(data.version)}</div>
+      </div>
+      <div class="gh-actions"><span class="badge ${healthy ? 'on' : 'off'}">${healthy ? 'Online' : 'Degraded'}</span></div>
+    </div>
+    <div class="card" style="max-width:680px;margin:0 auto 24px;padding:6px 20px">
+      <div class="status-row"><span>Web service</span>${up(true)}<span class="muted">Serving this page</span></div>
+      <div class="status-row"><span>Discord gateway</span>${up(data.discord)}<span class="muted">${data.discord ? `Connected · ${data.ping}ms latency` : 'Not connected'}</span></div>
+      <div class="status-row"><span>Database</span>${up(data.dbOk)}<span class="muted">${esc(data.dbSize)}</span></div>
+    </div>
+    <div class="stat-grid" style="max-width:680px;margin:0 auto">
+      ${statCard('Uptime', fmtUptime(data.uptime))}
+      ${statCard('Servers', data.guilds)}
+      ${statCard('Members', data.members)}
+      ${statCard('Commands', data.commands)}
+      ${statCard('Modules', data.modules)}
+      ${statCard('Discord uptime', data.discordUptime)}
+    </div>`;
+  return layout({ title: 'Status', user, content: body });
+}
+
 /** Full-page error screen: big gradient code, icon, message, back buttons. */
 function errorPage({ status, message, user, back = '/' }) {
   const meta = ERROR_META[status] || ERROR_META[500];
@@ -622,4 +654,4 @@ const ERROR_META = {
   503: { title: 'Temporarily unavailable' },
 };
 
-module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage, errorPage };
+module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage, statusPage, errorPage };

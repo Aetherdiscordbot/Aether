@@ -181,6 +181,10 @@ const CSS = `
 html { scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
 body {
   margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -188,6 +192,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
+main.container { flex: 1 0 auto; width: 100%; }
 /* ── Aurora background ─────────────────────────────────────────────── */
 body::before {
   content: '';
@@ -566,6 +571,15 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
   background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .stat-card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── Status page ───────────────────────────────────────────────────── */
+.status-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.status-row:last-child { border-bottom: none; }
+.status-row > span:first-child { font-weight: 700; min-width: 150px; }
+.status-row > span:last-child { margin-left: auto; color: var(--muted); font-size: 12.5px; text-align: right; }
 
 .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .tbl th {

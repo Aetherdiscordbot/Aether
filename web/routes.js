@@ -717,10 +717,45 @@ function buildRouter(getClient, opts = {}) {
     res.redirect('/owner?ok=1');
   });
 
-  // ── Health ─────────────────────────────────────────────────────────────
+  // ── Health / status ────────────────────────────────────────────────────
   router.get('/health', (req, res) => {
     const client = getClient();
-    res.json({ ok: true, service: 'aether-web', uptime: process.uptime(), discord: Boolean(client?.isReady()) });
+    const data = {
+      ok: true,
+      service: 'aether-web',
+      uptime: process.uptime(),
+      discord: Boolean(client?.isReady()),
+    };
+    if (!String(req.headers.accept || '').includes('text/html')) {
+      return res.json(data);
+    }
+    let dbOk = true;
+    let dbSize = '?';
+    try {
+      const db = require('../database/db');
+      db.prepare('SELECT 1').get();
+      dbSize = (require('fs').statSync(config.dbPath).size / 1024 / 1024).toFixed(1) + ' MB';
+    } catch (e) {
+      dbOk = false;
+    }
+    const discord = client?.isReady?.() ? client : null;
+    res.send(
+      pages.statusPage({
+        user: currentUser(req),
+        data: {
+          ...data,
+          dbOk,
+          dbSize,
+          version: require('../package.json').version,
+          ping: Math.round(discord?.ws?.ping || 0),
+          guilds: discord ? discord.guilds.cache.size : 0,
+          members: discord ? [...discord.guilds.cache.values()].reduce((n, g) => n + (g.memberCount || 0), 0) : 0,
+          commands: require('../handlers/commandHandler').commands.size,
+          modules: modules.MODULES.length,
+          discordUptime: discord ? `${Math.floor(discord.uptime / 3600000)}h ${Math.floor((discord.uptime % 3600000) / 60000)}m` : '—',
+        },
+      })
+    );
   });
 
   // ── 404 catch-all ──────────────────────────────────────────────────────
