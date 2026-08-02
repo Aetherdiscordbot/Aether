@@ -76,12 +76,9 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
       <div class="premium-hero">
         <h3>✦ Premium active</h3>
         <div class="stats">
-          <div class="stat"><span class="label">Plan</span><span class="value">${esc(premium.plan || 'premium')}</span></div>
-          <div class="stat"><span class="label">Activated</span><span class="value">${esc((premium.activated_at || '').slice(0, 10))}</span></div>
           <div class="stat"><span class="label">Expires</span><span class="value">${esc((premium.expires_at || 'never').slice(0, 10))}</span></div>
-          <div class="stat"><span class="label">Membership</span><span class="value mono">${esc(shortId(premium.membership_id))}</span></div>
         </div>
-        ${premiumServers.length > 1 ? transferForm({ guildId: guild.id, premiumServers }) : '<p class="muted">Premium can be transferred to another server you own from your <a href="/dashboard">server list</a>.</p>'}
+        ${premiumServers.length > 1 ? transferForm({ guildId: guild.id, premiumServers }) : ''}
       </div>`;
   } else if (premium) {
     premiumCard = `
@@ -312,4 +309,106 @@ function transcriptPage({ guild, ticket }) {
   return layout({ title: `Transcript · ${guild.name}`, user: null, content: body });
 }
 
-module.exports = { serverList, serverOverview, moduleConfig, transcriptPage };
+/** Bot owner dashboard: global stats + premium management. */
+function ownerPage({ user, stats, notice }) {
+  const fmt = (iso) => (iso ? new Date(iso).toISOString().slice(0, 16).replace('T', ' ') : '—');
+  const uptime = stats.uptime;
+  const uptimeText = `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
+
+  const statCard = (label, value) => `
+    <div class="stat-card"><span class="value">${esc(value)}</span><span class="label">${esc(label)}</span></div>`;
+
+  const premRows = stats.premiumServers
+    .map(
+      (p) => `
+      <tr>
+        <td class="mono">${esc(p.guild_id)}</td>
+        <td>${esc(p.plan || 'premium')}</td>
+        <td><span class="badge ${p.status === 'active' && p.active ? 'on' : 'off'}">${p.status}${p.whitelisted ? ' · whitelisted' : ''}</span></td>
+        <td>${fmt(p.activated_at)}</td>
+        <td>${fmt(p.expires_at)}</td>
+        <td>
+          <form method="post" action="/owner/premium" style="display:inline">
+            <input type="hidden" name="action" value="revoke">
+            <input type="hidden" name="guildId" value="${esc(p.guild_id)}">
+            <button class="btn small" type="submit">Revoke</button>
+          </form>
+        </td>
+      </tr>`
+    )
+    .join('');
+
+  const ticketRows = stats.recentTickets
+    .map(
+      (t) => `
+      <tr>
+        <td class="mono">${esc(shortId(t.id))}</td>
+        <td class="mono">${esc(t.guild_id)}</td>
+        <td class="mono">${esc(t.user_id)}</td>
+        <td>${esc(t.category || 'General')}</td>
+        <td><span class="badge ${t.status === 'open' ? 'on' : 'off'}">${esc(t.status)}</span></td>
+        <td>${fmt(t.created_at)}</td>
+      </tr>`
+    )
+    .join('');
+
+  const body = `
+    ${notice}
+    <div class="tabbar"><a class="active" href="/owner">Owner dashboard</a><a href="/dashboard">‹ Back to dashboard</a></div>
+    <div class="guild-header">
+      <div><div class="gh-name">🪐 Owner dashboard</div><div class="gh-id">bot status · global stats · premium management</div></div>
+    </div>
+    <div class="stat-grid">
+      ${statCard('Servers', stats.guilds)}
+      ${statCard('Members', stats.members)}
+      ${statCard('Premium active', `${stats.premiumActive} / ${stats.premiumTotal}`)}
+      ${statCard('Tickets', `${stats.openTickets} open · ${stats.closedTickets} closed`)}
+      ${statCard('Active giveaways', stats.giveaways)}
+      ${statCard('Pending reminders', stats.reminders)}
+      ${statCard('Pending memberships', stats.pendingMemberships)}
+      ${statCard('Uptime', uptimeText)}
+      ${statCard('Commands', stats.commands)}
+      ${statCard('Modules', stats.modules)}
+      ${statCard('DB size', stats.dbSize)}
+      ${statCard('Discord', stats.discordReady ? 'Connected' : 'Disconnected')}
+    </div>
+
+    <h3 style="margin-top:30px">Grant premium</h3>
+    <div class="card" style="max-width:560px">
+      <form method="post" action="/owner/premium" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <div class="field" style="flex:1;min-width:180px;margin:0">
+          <label>Server ID</label>
+          <input type="text" name="guildId" placeholder="123456789012345678" required>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Plan</label>
+          <select name="plan"><option value="premium">premium</option><option value="lifetime">lifetime</option></select>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Expires</label>
+          <input type="date" name="expiresAt">
+        </div>
+        <button class="btn" type="submit">Grant</button>
+      </form>
+    </div>
+
+    <h3 style="margin-top:30px">Premium servers (${stats.premiumTotal})</h3>
+    <div class="card" style="padding:6px 18px 18px;overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Guild</th><th>Plan</th><th>Status</th><th>Activated</th><th>Expires</th><th></th></tr></thead>
+        <tbody>${premRows || '<tr><td colspan="6" class="muted center">No premium servers yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px">Recent tickets</h3>
+    <div class="card" style="padding:6px 18px 18px;overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Ticket</th><th>Guild</th><th>User</th><th>Category</th><th>Status</th><th>Opened</th></tr></thead>
+        <tbody>${ticketRows || '<tr><td colspan="6" class="muted center">No tickets yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  return layout({ title: 'Owner dashboard', user, content: body });
+}
+
+module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage };

@@ -38,6 +38,12 @@ function buildRouter(getClient, opts = {}) {
     return res.redirect('/login');
   }
 
+  function requireOwner(req, res, next) {
+    const u = req.session?.user;
+    if (u && config.owners.includes(u.id)) return next();
+    return res.status(403).send(layout({ title: 'Forbidden', user: currentUser(req), content: alert('error', 'You are not the bot owner.') }));
+  }
+
   function currentUser(req) {
     const u = req.session?.user;
     if (!u) return null;
@@ -46,6 +52,7 @@ function buildRouter(getClient, opts = {}) {
       username: u.username,
       avatarUrl: u.avatarUrl || `https://cdn.discordapp.com/embed/avatars/0.png`,
       guilds: u.guilds || [],
+      isOwner: config.owners.includes(u.id),
     };
   }
 
@@ -516,6 +523,61 @@ function buildRouter(getClient, opts = {}) {
       logger.error(`Premium transfer failed: ${err.message}`);
       res.status(400).send(layout({ title: 'Transfer failed', user, content: alert('error', err.message) }));
     }
+  });
+
+  // ── Owner dashboard ────────────────────────────────────────────────────
+  router.get('/owner', requireAuth, requireOwner, (req, res) => {
+    const user = currentUser(req);
+    const client = getClient();
+
+    const guilds = [...(client?.guilds.cache.values() || [])];
+    const premiumRows = db.prepare('SELECT * FROM premium_servers ORDER BY activated_at DESC').all();
+    const ticketsByStatus = db.prepare('SELECT status, COUNT(*) AS n FROM tickets GROUP BY status').all();
+    const openTickets = ticketsByStatus.find((t) => t.status === 'open')?.n || 0;
+    const closedTickets = ticketsByStatus.find((t) => t.status === 'closed')?.n || 0;
+
+    const stats = {
+      guilds: client?.guilds.cache.size || 0,
+      members: guilds.reduce((n, g) => n + (g.memberCount || 0), 0),
+      premiumServers: premiumRows.map((p) => ({ ...p, active: premiumService.isPremium(p.guild_id) })),
+      premiumTotal: premiumRows.length,
+      premiumActive: premiumRows.filter((p) => premiumService.isPremium(p.guild_id)).length,
+      openTickets,
+      closedTickets,
+      giveaways: db.prepare('SELECT COUNT(*) AS n FROM giveaways WHERE ended = 0').get().n,
+      reminders: db.prepare('SELECT COUNT(*) AS n FROM reminders WHERE sent = 0').get().n,
+      pendingMemberships: db.prepare("SELECT COUNT(*) AS n FROM premium_memberships WHERE status = 'pending'").get().n,
+      recentTickets: db.prepare('SELECT * FROM tickets ORDER BY created_at DESC LIMIT 8').all(),
+      commands: require('../handlers/commandHandler').commands.size,
+      modules: modules.MODULES.length,
+      uptime: process.uptime(),
+      dbSize: (require('fs').statSync(config.dbPath).size / 1024 / 1024).toFixed(1) + ' MB',
+      discordReady: Boolean(client?.isReady?.()),
+    };
+
+    const notice =
+      req.query.ok === '1' ? alert('success', 'Premium updated.') : req.query.err === '1' ? alert('error', 'Invalid server ID.') : '';
+    res.send(pages.ownerPage({ user, stats, notice }));
+  });
+
+  router.post('/owner/premium', requireAuth, requireOwner, (req, res) => {
+    const { action, guildId, plan, expiresAt } = req.body;
+    if (!/^\d{10,20}$/.test(String(guildId || ''))) {
+      return res.redirect('/owner?err=1');
+    }
+    if (action === 'grant') {
+      db.prepare(
+        `INSERT INTO premium_servers (guild_id, plan, status, activated_at, expires_at) VALUES (?, ?, 'active', ?, ?)
+         ON CONFLICT(guild_id) DO UPDATE SET plan = excluded.plan, status = 'active', expires_at = excluded.expires_at`
+      ).run(String(guildId), String(plan || 'premium'), new Date().toISOString(), expiresAt ? new Date(expiresAt).toISOString() : null);
+      logger.info(`Owner dashboard: granted premium to ${guildId} (${plan || 'premium'})`);
+    } else if (action === 'revoke') {
+      db.prepare('DELETE FROM premium_servers WHERE guild_id = ?').run(String(guildId));
+      logger.info(`Owner dashboard: revoked premium from ${guildId}`);
+    } else {
+      return res.redirect('/owner?err=1');
+    }
+    res.redirect('/owner?ok=1');
   });
 
   // ── Health ─────────────────────────────────────────────────────────────

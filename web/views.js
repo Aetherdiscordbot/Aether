@@ -412,6 +412,28 @@ input[type=checkbox]:checked::after { transform: translateX(18px); background: #
 .mono { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 13px; }
 .center { text-align: center; }
 hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+/* ── Owner dashboard ────────────────────────────────────────────────── */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; display: flex; flex-direction: column; gap: 4px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.stat-card .value {
+  font-family: var(--display); font-size: 22px; font-weight: 800;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.stat-card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th {
+  text-align: left; color: var(--muted); font-weight: 600; font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: .05em; padding: 12px 10px; border-bottom: 1px solid var(--border);
+}
+.tbl td { padding: 10px; border-bottom: 1px solid var(--border); }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl td .badge { font-size: 11px; }
 `;
 
 /** Full HTML page around inner content. */
@@ -442,6 +464,7 @@ function layout({ title, user, content }) {
     <a href="/commands">Commands</a>
     <a href="/premium">Premium</a>
     <a href="/dashboard">Dashboard</a>
+    ${user?.isOwner ? '<a href="/owner">Owner</a>' : ''}
     ${navUser}
   </div>
 </nav>
