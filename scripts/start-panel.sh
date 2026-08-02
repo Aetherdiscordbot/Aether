@@ -21,7 +21,7 @@ fi
 
 if [ -x ./cloudflared ] && [ -n "$CLOUDFLARED_TOKEN" ]; then
   echo "[start-panel] Starting Cloudflare Tunnel"
-  ./cloudflared tunnel run "$CLOUDFLARED_TOKEN" &
+  ./cloudflared tunnel run --token "$CLOUDFLARED_TOKEN" &
   CLOUDFLARED_PID=$!
   trap 'kill $CLOUDFLARED_PID 2>/dev/null' EXIT
 else
