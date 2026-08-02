@@ -39,6 +39,13 @@ module.exports = {
 
       if (subCmd === 'image') {
         const prompt = interaction.options.getString('prompt');
+        const loading = baseEmbed({
+          color: Colors.primary,
+          title: '🎨 Generating image…',
+          description: `*${prompt.slice(0, 1024)}*`,
+          footer: { text: 'This can take up to a minute' },
+        });
+        await interaction.editReply({ embeds: [loading] });
         const { buffer } = await aiService.image(prompt);
         const embed = baseEmbed({ color: Colors.primary, title: '🎨 Generated image', description: `*${prompt.slice(0, 1024)}*` });
         return interaction.editReply({ embeds: [embed], files: [{ attachment: buffer, name: 'aether-ai.png' }] });
