@@ -17,7 +17,9 @@ function schedule(expression, fn, name = 'cron') {
   const task = cron.schedule(expression, () => {
     runSafe(fn, name);
   });
-  jobs.push({ task, name, type: 'cron' });
+  // node-cron may auto-start on creation; stop so startAll() controls it.
+  if (typeof task.stop === 'function') task.stop();
+  jobs.push({ task, name, type: 'cron', started: false });
   logger.debug(`Scheduled cron job "${name}" (${expression})`);
 }
 
@@ -42,16 +44,19 @@ function runSafe(fn, name) {
 
 function startAll() {
   for (const job of jobs) {
-    if (job.type === 'cron' && !job.task.isStarted()) {
-      job.task.start();
+    if (job.type === 'cron' && !job.started) {
+      if (typeof job.task.start === 'function') job.task.start();
+      job.started = true;
     }
   }
 }
 
 function stopAll() {
   for (const job of jobs) {
-    if (job.type === 'cron') job.task.stop();
-    else clearInterval(job.handle);
+    if (job.type === 'cron') {
+      if (typeof job.task.stop === 'function') job.task.stop();
+      job.started = false;
+    } else clearInterval(job.handle);
   }
 }
 
