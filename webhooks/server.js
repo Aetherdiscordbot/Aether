@@ -30,6 +30,12 @@ function createServer() {
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
+  // Test page: open the root of the domain in a browser to confirm the host works.
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    sendHtml(res, 200, testPage());
+    return;
+  }
+
   // Health/status endpoint for uptime monitors.
   if (req.method === 'GET' && url.pathname === '/health') {
     send(res, 200, JSON.stringify({ ok: true, service: 'aether-webhooks' }));
@@ -118,6 +124,64 @@ function readBody(req) {
 function send(res, status, text) {
   res.writeHead(status, { 'Content-Type': 'text/plain' });
   res.end(text);
+}
+
+function sendHtml(res, status, html) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
+/** Minimal test page used to verify the host/domain resolves to this server. */
+function testPage() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aether · Host Check</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e1b4b, #0f172a);
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+    .logo { font-size: 42px; }
+    h1 { margin: 12px 0 6px; color: #fff; }
+    p { margin: 6px 0; color: #94a3b8; }
+    .ok {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🪐</div>
+    <h1>Aether</h1>
+    <p>The host is working and responding.</p>
+    <span class="ok">● Server online</span>
+  </div>
+</body>
+</html>`;
 }
 
 module.exports = { start, stop, server };
