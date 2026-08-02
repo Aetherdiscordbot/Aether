@@ -16,7 +16,7 @@ const modules = require('./modules');
 const { layout, alert } = require('./views');
 
 /** Build the router. `getClient` returns the Discord client once logged in. */
-function buildRouter(getClient) {
+function buildRouter(getClient, opts = {}) {
   const router = express.Router();
 
   // ── Session middleware ─────────────────────────────────────────────────
@@ -24,6 +24,7 @@ function buildRouter(getClient) {
   router.use(
     session({
       secret: config.web.sessionSecret || crypto.randomBytes(32).toString('hex'),
+      store: opts.sessionStore,
       resave: false,
       saveUninitialized: false,
       cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 7 },
@@ -43,6 +44,7 @@ function buildRouter(getClient) {
       id: u.id,
       username: u.username,
       avatarUrl: u.avatarUrl || `https://cdn.discordapp.com/embed/avatars/0.png`,
+      guilds: u.guilds || [],
     };
   }
 

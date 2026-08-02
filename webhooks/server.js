@@ -12,6 +12,7 @@
  * guild data (the bot isn't connected yet).
  */
 const express = require('express');
+const session = require('express-session');
 const config = require('../config/config');
 const logger = require('../services/logger');
 const db = require('../database/db');
@@ -24,6 +25,7 @@ const MAX_BODY = 1 * 1024 * 1024; // 1MB safety cap
 let app = null;
 let server = null;
 let discordClient = null;
+const sessionStore = new session.MemoryStore();
 
 function setClient(client) {
   discordClient = client;
@@ -86,7 +88,7 @@ function createApp() {
   // before the router so dashboard POST forms are parsed).
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false }));
-  app.use(buildRouter(getClient));
+  app.use(buildRouter(getClient, { sessionStore }));
 
   // 404 for everything else.
   app.use((req, res) => {
