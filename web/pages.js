@@ -4,11 +4,8 @@
  * easy to test and reason about.
  */
 const { esc, shortId, layout, alert } = require('./views');
-const { Colors } = require('../utils/discord');
 
-const MANAGE_GUILD = 1n << 5n;
-
-/** Render the server list: every guild the user can manage, with premium + bot status. */
+/** Render the server list: every guild the user is in, with manage + bot status. */
 function serverList({ user, guilds }) {
   const rows = guilds
     .map((g) => {
@@ -18,8 +15,7 @@ function serverList({ user, guilds }) {
       const botBadge = g.botIn
         ? '<span class="badge bot">Aether in server</span>'
         : `<a class="btn secondary small" href="${esc(g.inviteUrl)}" target="_blank">Invite Aether</a>`;
-      const manage = (BigInt(g.permissions || 0) & MANAGE_GUILD) !== 0n;
-      const manageLink = manage
+      const manageLink = g.manage
         ? `<a class="btn small" href="/dashboard/${g.id}">Manage</a>`
         : '<span class="badge off">No manage perms</span>';
       const icon = g.iconUrl
@@ -41,8 +37,8 @@ function serverList({ user, guilds }) {
 
   const body = `
     <h2>Your servers</h2>
-    <p class="muted">Servers you can manage that have Aether (or where you can invite it). Premium is per-server.</p>
-    ${rows || '<div class="card">No manageable servers found. <a href="/login">Re-auth</a> or <a href="/invite">invite Aether</a> to a server.</div>'}`;
+    <p class="muted">Every server you're in, with Aether status. Premium is per-server.</p>
+    ${rows || '<div class="card">No servers found. <a href="/login">Re-auth</a> to refresh your server list.</div>'}`;
 
   return layout({ title: 'Dashboard', user, content: body });
 }

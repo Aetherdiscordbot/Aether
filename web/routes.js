@@ -52,24 +52,29 @@ function buildRouter(getClient) {
     return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${ext}?size=128`;
   }
 
-  /** Guilds the user can manage, joined with premium + bot presence. */
-  async function manageableGuilds(user) {
+  /** Every guild the user is in, with manage/bot/premium status. */
+  async function allGuilds(user) {
     const client = getClient();
     const guilds = user.guilds || [];
-    return guilds
-      .filter((g) => authService.canManageGuild(g))
-      .map((g) => {
-        const botIn = Boolean(client && client.guilds.cache.has(g.id));
-        return {
-          ...g,
-          botIn,
-          inviteUrl: `https://discord.com/api/oauth2/authorize?client_id=${config.clientId}&permissions=${config.web.invitePermissions}&scope=bot%20applications.commands&guild_id=${g.id}`,
-          iconUrl: g.icon
-            ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${g.icon.startsWith('a_') ? 'gif' : 'png'}?size=128`
-            : null,
-          premium: premiumService.isPremium(g.id),
-        };
-      });
+    return guilds.map((g) => {
+      const botIn = Boolean(client && client.guilds.cache.has(g.id));
+      return {
+        ...g,
+        botIn,
+        manage: authService.canManageGuild(g),
+        inviteUrl: `https://discord.com/api/oauth2/authorize?client_id=${config.clientId}&permissions=${config.web.invitePermissions}&scope=bot%20applications.commands&guild_id=${g.id}`,
+        iconUrl: g.icon
+          ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.${g.icon.startsWith('a_') ? 'gif' : 'png'}?size=128`
+          : null,
+        premium: premiumService.isPremium(g.id),
+      };
+    });
+  }
+
+  /** Only guilds the user can manage (used for premium transfer targets). */
+  async function manageableGuilds(user) {
+    const all = await allGuilds(user);
+    return all.filter((g) => g.manage);
   }
 
   // ── Public: landing ────────────────────────────────────────────────────
@@ -193,7 +198,7 @@ function buildRouter(getClient) {
   // ── Dashboard ──────────────────────────────────────────────────────────
   router.get('/dashboard', requireAuth, async (req, res) => {
     const user = currentUser(req);
-    const guilds = await manageableGuilds(user);
+    const guilds = await allGuilds(user);
     res.send(pages.serverList({ user, guilds }));
   });
 
