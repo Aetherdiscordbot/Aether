@@ -7,3 +7,5 @@ logs/
 *.db-shm
 *.db-wal
 .env.example
+cloudflared
+cloudflared.token
