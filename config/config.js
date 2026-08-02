@@ -56,7 +56,7 @@ const config = {
     companyId: process.env.WHOP_COMPANY_ID || '',
     productId: process.env.WHOP_PRODUCT_ID || '',
     checkoutUrl: process.env.WHOP_CHECKOUT_URL || 'https://whop.com',
-    price: process.env.WHOP_PRICE || '5.99',
+    price: process.env.WHOP_PRICE || '9.99',
     // Statuses that still count as an active paid membership.
     activeStatuses: ['active', 'trialing'],
     // Checkout custom-field IDs that carry the Discord identity.

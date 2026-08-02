@@ -170,7 +170,7 @@ function buildRouter(getClient, opts = {}) {
         </div>
         <div class="pricing">
           <div class="chip" style="margin-bottom:4px">Aether Premium</div>
-          <div class="price">$${(config.whop.price || '5.99')}</div>
+          <div class="price">$${(config.whop.price || '9.99')}</div>
           <div class="per">per month · one server</div>
           <ul>
             <li><span class="tick">✓</span> All premium modules on <b>one server</b></li>
