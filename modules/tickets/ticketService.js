@@ -179,6 +179,8 @@ async function closeTicket(guild, channel, actor, reason, client) {
     description: `${actor} closed ${channel}${reason ? ` — ${reason}` : ''}`,
   });
 
+  setTimeout(() => channel.delete('Ticket closed, auto-cleanup').catch(() => {}), 5000);
+
   return { ticket, transcript };
 }
 
