@@ -15,6 +15,7 @@ const settings = require('../services/settings');
 const permissions = require('../services/permissions');
 const logger = require('../services/logger');
 const logService = require('../services/logService');
+const ticketService = require('../modules/tickets/ticketService');
 
 const ROLES = [
   { name: 'Staff Team', color: '#8b5cf6', hoist: true },
@@ -152,7 +153,7 @@ module.exports = {
     }
 
     const guild = message.guild;
-    const summary = { roles: [], categories: [], channels: [], renamed: [], gates: [], wired: [], skipped: [] };
+    const summary = { roles: [], categories: [], channels: [], renamed: [], gates: [], wired: [], skipped: [], permOpen: 0, permLocked: 0 };
     await message.channel.sendTyping().catch(() => {});
 
     try {
@@ -195,23 +196,25 @@ module.exports = {
         for (const def of cat.channels) {
           const full = fullChannelName(def);
           const existing = findChannel(guild, full) || findChannel(guild, def.name);
+          let channel;
           if (existing) {
             if (existing.name !== full) {
               await existing.setName(full, 'Aether ?setupserver');
               summary.renamed.push(`#${def.name} -> ${full}`);
-            } else {
-              summary.skipped.push(`${full} (already exists)`);
             }
-            continue;
+            channel = existing;
+          } else {
+            channel = await guild.channels.create({
+              name: full,
+              type: ChannelType.GuildText,
+              parent: category.id,
+              reason: 'Aether ?setupserver',
+            });
+            summary.channels.push(full);
           }
-          await guild.channels.create({
-            name: full,
-            type: ChannelType.GuildText,
-            parent: category.id,
-            permissionOverwrites: textPerms(guild, cat.name),
-            reason: 'Aether ?setupserver',
-          });
-          summary.channels.push(full);
+          await channel.permissionOverwrites.set(GATED[cat.name] ? gateOverrides(guild, cat.name) : textPerms(guild, cat.name), 'Aether ?setupserver');
+          if (GATED[cat.name]) summary.permLocked++;
+          else summary.permOpen++;
         }
       }
 
@@ -229,23 +232,24 @@ module.exports = {
         const full = fullChannelName(def);
         const slug = def.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         const existing = findChannel(guild, full) || findChannel(guild, def.name) || findChannel(guild, slug);
+        let channel;
         if (existing) {
           if (existing.name !== full) {
             await existing.setName(full, 'Aether ?setupserver');
             summary.renamed.push(`Voice ${def.name} -> ${full}`);
-          } else {
-            summary.skipped.push(`${full} (already exists)`);
           }
-          continue;
+          channel = existing;
+        } else {
+          channel = await guild.channels.create({
+            name: full,
+            type: ChannelType.GuildVoice,
+            parent: voiceCat.id,
+            reason: 'Aether ?setupserver',
+          });
+          summary.channels.push(`Voice ${full}`);
         }
-        await guild.channels.create({
-          name: full,
-          type: ChannelType.GuildVoice,
-          parent: voiceCat.id,
-          permissionOverwrites: voicePerms(guild),
-          reason: 'Aether ?setupserver',
-        });
-        summary.channels.push(`Voice ${full}`);
+        await channel.permissionOverwrites.set(voicePerms(guild), 'Aether ?setupserver');
+        summary.permOpen++;
       }
 
       // ── Wire module settings ────────────────────────────────────────────
@@ -273,6 +277,12 @@ module.exports = {
           ],
         });
         summary.wired.push('Tickets -> BOT & SUPPORT (panel, staff roles, log, transcripts, categories)');
+      }
+
+      // Ticket panel: post the open-ticket embed into help-and-support.
+      if (helpChannel) {
+        await ticketService.sendPanel(guild, helpChannel);
+        summary.wired.push('Ticket panel posted in help-and-support');
       }
 
       // Logging: every event type -> #audit-log.
@@ -313,6 +323,7 @@ module.exports = {
         field('Created channels', summary.channels),
         field('Renamed channels', summary.renamed),
         field('Permission gates', summary.gates.map((g) => `${g} locked`)),
+        field('Channel permissions', [`${summary.permOpen} open · ${summary.permLocked} role-locked`]),
         field('Wired into modules', summary.wired),
         field('Skipped', summary.skipped),
       ].filter(Boolean),
