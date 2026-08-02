@@ -7,6 +7,7 @@ const logger = require('../services/logger');
 const levelingService = require('../modules/leveling/levelingService');
 const securityService = require('../modules/security/securityService');
 const automodService = require('../modules/automod/automodService');
+const autoResponses = require('../services/autoResponses');
 
 module.exports = {
   name: 'messageCreate',
@@ -47,6 +48,13 @@ module.exports = {
       await automodService.checkMessage(message);
     } catch (err) {
       logger.debug(`Auto-mod error: ${err.message}`);
+    }
+
+    // Auto-responses.
+    try {
+      autoResponses.check(message);
+    } catch (err) {
+      logger.debug(`Auto-response error: ${err.message}`);
     }
   },
 };
