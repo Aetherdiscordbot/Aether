@@ -96,7 +96,7 @@ function request(path) {
     'Status 200': res.status === 200,
     'Manageable 111 clickable': res.body.includes('/dashboard/111'),
     'Invite mini-button for 222 (bot not in)': res.body.includes('invite-mini'),
-    'Lock badge for non-manageable 333/444': (res.body.match(/server-badge lock/g) || []).length === 2,
+    'Locked style for non-manageable 333/444': (res.body.match(/server-avatar locked/g) || []).length === 2,
     'Premium ring on 111': res.body.includes('server-avatar premium'),
     'Bot checkmark on 111 (manageable)': (res.body.match(/server-badge ok/g) || []).length === 1,
     'Both sections rendered': res.body.includes('You can manage') && res.body.includes('Other servers'),

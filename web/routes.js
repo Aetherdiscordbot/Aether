@@ -114,7 +114,7 @@ function buildRouter(getClient, opts = {}) {
         user: currentUser(req),
         content: `
         <div class="hero">
-          <div class="chip">🪐 All-in-one Discord bot</div>
+          <div class="chip">All-in-one Discord bot</div>
           <h1>One bot to run your<br><span class="grad">entire server</span></h1>
           <p>Leveling, economy, tickets, automod, giveaways, verification and more — with a premium plan that covers every module on one server.</p>
           <div class="cta">
@@ -183,9 +183,9 @@ function buildRouter(getClient, opts = {}) {
         <div class="section-title">Premium includes</div>
         <p class="section-sub">${esc(premiumCmds.join(' · '))}</p>
         <div class="grid">
-          <div class="feature"><div class="icon">✨</div><h4>Premium servers</h4><p>Tickets, applications, security, automod, logging, backup, embed, giveaways and more — full config from the dashboard.</p></div>
-          <div class="feature"><div class="icon">⚙️</div><h4>Premium setup</h4><p>${esc(premiumSubs.join('. ') || '')}</p></div>
-          <div class="feature"><div class="icon">🔗</div><h4>Transferable</h4><p>Move your premium to another server you own — right from the dashboard.</p></div>
+          <div class="feature"><h4>Premium servers</h4><p>Tickets, applications, security, automod, logging, backup, embed, giveaways and more — full config from the dashboard.</p></div>
+          <div class="feature"><h4>Premium setup</h4><p>${esc(premiumSubs.join('. ') || '')}</p></div>
+          <div class="feature"><h4>Transferable</h4><p>Move your premium to another server you own — right from the dashboard.</p></div>
         </div>`,
       })
     );
@@ -263,11 +263,11 @@ function buildRouter(getClient, opts = {}) {
         const avatar = member
           ? member.user.displayAvatarURL({ size: 64 })
           : defaultAvatar(r.user_id);
-        const medal = ['🥇', '🥈', '🥉'][i];
+        const rank = i < 3 ? i + 1 : '';
         const needed = leveling.xpForLevel(r.level);
         const percent = Math.min(100, Math.max(1, Math.round((r.xp / needed) * 100)));
-        return `<div class="lb-row${medal ? ' top' + (i + 1) : ''}">
-          <div class="lb-rank">${medal || i + 1}</div>
+        return `<div class="lb-row${rank ? ' top' + rank : ''}">
+          <div class="lb-rank">${rank || i + 1}</div>
           <img class="lb-avatar" src="${esc(avatar)}" alt="">
           <div class="lb-main">
             <div class="lb-name">${esc(name)} <span class="lb-lvl">Lv ${r.level}</span></div>
@@ -282,7 +282,7 @@ function buildRouter(getClient, opts = {}) {
     const guildName = discordGuild ? discordGuild.name : `Server ${guildId}`;
     const icon = discordGuild?.icon
       ? `<img class="lb-icon" src="https://cdn.discordapp.com/icons/${guildId}/${discordGuild.icon}.${discordGuild.icon.startsWith('a_') ? 'gif' : 'png'}?size=128" alt="">`
-      : `<span class="lb-icon" style="display:grid;place-items:center;font-size:28px">🪐</span>`;
+      : `<span class="lb-icon" style="display:grid;place-items:center;font-size:26px;font-weight:800;background:var(--grad);color:#fff">${esc((guildName[0] || 'A').toUpperCase())}</span>`;
 
     const body = ranked.length
       ? `
@@ -750,17 +750,17 @@ const esc = (s) =>
     .replace(/"/g, '&quot;');
 
 const features = `
-  <div class="feature"><div class="icon">🎫</div><h4>Tickets</h4><p>Custom support tickets with claims, transcripts and categories.</p></div>
-  <div class="feature"><div class="icon">📈</div><h4>Leveling</h4><p>XP, roles and a full leaderboard for active members.</p></div>
-  <div class="feature"><div class="icon">🪙</div><h4>Economy</h4><p>Currency, daily rewards, work, shop and item inventory.</p></div>
-  <div class="feature"><div class="icon">🛡️</div><h4>Security</h4><p>Anti-raid, anti-spam, account-age gates and join lockdown.</p></div>
-  <div class="feature"><div class="icon">🤖</div><h4>Automod</h4><p>Word filters, caps, links, mentions and emoji limits.</p></div>
-  <div class="feature"><div class="icon">🎉</div><h4>Giveaways</h4><p>Reaction giveaways with winner selection and rerolls.</p></div>
-  <div class="feature"><div class="icon">💡</div><h4>Suggestions</h4><p>Member suggestions with staff approve/deny.</p></div>
-  <div class="feature"><div class="icon">✅</div><h4>Verification</h4><p>Verify-button gate with role assignment.</p></div>
-  <div class="feature"><div class="icon">👋</div><h4>Welcome</h4><p>Welcome/goodbye messages and automatic roles.</p></div>
-  <div class="feature"><div class="icon">📋</div><h4>Logging</h4><p>Full audit logging across channels.</p></div>
-  <div class="feature"><div class="icon">🗃️</div><h4>Backup</h4><p>Snapshot and restore your server configuration.</p></div>
-  <div class="feature"><div class="icon">🪐</div><h4>Premium</h4><p>Everything above, transferred between servers you own.</p></div>`;
+  <div class="feature"><h4>Tickets</h4><p>Custom support tickets with claims, transcripts and categories.</p></div>
+  <div class="feature"><h4>Leveling</h4><p>XP, roles and a full leaderboard for active members.</p></div>
+  <div class="feature"><h4>Economy</h4><p>Currency, daily rewards, work, shop and item inventory.</p></div>
+  <div class="feature"><h4>Security</h4><p>Anti-raid, anti-spam, account-age gates and join lockdown.</p></div>
+  <div class="feature"><h4>Automod</h4><p>Word filters, caps, links, mentions and emoji limits.</p></div>
+  <div class="feature"><h4>Giveaways</h4><p>Reaction giveaways with winner selection and rerolls.</p></div>
+  <div class="feature"><h4>Suggestions</h4><p>Member suggestions with staff approve/deny.</p></div>
+  <div class="feature"><h4>Verification</h4><p>Verify-button gate with role assignment.</p></div>
+  <div class="feature"><h4>Welcome</h4><p>Welcome/goodbye messages and automatic roles.</p></div>
+  <div class="feature"><h4>Logging</h4><p>Full audit logging across channels.</p></div>
+  <div class="feature"><h4>Backup</h4><p>Snapshot and restore your server configuration.</p></div>
+  <div class="feature"><h4>Premium</h4><p>Everything above, transferred between servers you own.</p></div>`;
 
 module.exports = { buildRouter };

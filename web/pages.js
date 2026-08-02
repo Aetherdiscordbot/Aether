@@ -6,24 +6,6 @@
 const { esc, shortId, layout, alert } = require('./views');
 const config = require('../config/config');
 
-const MODULE_ICONS = {
-  ticket: '🎫',
-  leveling: '📈',
-  economy: '🪙',
-  verification: '✅',
-  suggestions: '💡',
-  security: '🛡️',
-  automod: '🤖',
-  logging: '📋',
-  welcome: '👋',
-  applications: '📝',
-  backup: '💾',
-  embed: '🧩',
-  giveaway: '🎉',
-  react: '🔘',
-  staff: '⭐',
-};
-
 /** Render the server list: circular icons, manageable servers first. */
 function serverList({ user, guilds }) {
   const manage = guilds.filter((g) => g.manage);
@@ -43,7 +25,7 @@ function serverList({ user, guilds }) {
         : `<a class="invite-mini" href="${esc(g.inviteUrl)}" target="_blank" rel="noopener">Invite</a>`;
       return `<div class="server-item">${tooltip}<a class="server-avatar${premiumCls}${botCls}" href="/dashboard/${esc(g.id)}">${icon}${badge}</a>${invite}</div>`;
     }
-    return `<div class="server-item">${tooltip}<span class="server-avatar locked">${icon}<span class="server-badge lock">🔒</span></span></div>`;
+    return `<div class="server-item">${tooltip}<span class="server-avatar locked">${icon}</span></div>`;
   };
 
   const section = (title, list, empty) => `
@@ -65,9 +47,6 @@ function serverList({ user, guilds }) {
 
 /** Render a single server's overview: premium status + module states. */
 function serverOverview({ user, guild, modules, premium, premiumServers }) {
-  const icon = guild.iconUrl
-    ? `<img src="${esc(guild.iconUrl)}" alt="">`
-    : '';
   const isActive = premium?.active === true;
   let premiumCard;
   if (isActive) {
@@ -104,29 +83,25 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
       const disabled = m.premium && !isActive;
       return `<div class="card module-card${disabled ? ' locked' : ''}">
         <div class="mc-top">
-          <span class="mc-ico">${esc(MODULE_ICONS[m.key] || '🧩')}</span>
           <span style="display:flex;gap:6px;align-items:center">${state}${gate}</span>
         </div>
         <span class="mc-name">${esc(m.name)}</span>
         <p>${esc(m.description)}</p>
-        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">${disabled ? '🔒 Locked' : 'Configure'}</a>
+        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">${disabled ? 'Locked' : 'Configure'}</a>
       </div>`;
     })
     .join('');
 
   const body = `
-    <div class="tabbar">
-      <a href="/dashboard">‹ Back to servers</a>
-      <a class="active" href="/dashboard/${guild.id}">Overview</a>
-      ${premiumTabs(guild.id, isActive)}
-    </div>
+    ${serverTabs({ guild, active: 'overview', isPremium: isActive })}
     <div class="guild-header">
-      ${icon}
       <div>
         <div class="gh-name">${esc(guild.name)}</div>
-        <div class="gh-id">${esc(guild.id)}</div>
+        <span class="gh-id">${esc(guild.id)}</span>
       </div>
-      <a class="btn secondary small" style="margin-left:auto" href="/server/${guild.id}/leaderboard">📈 Public leaderboard</a>
+      <div class="gh-actions">
+        <a class="btn secondary small" href="/server/${guild.id}/leaderboard">Public leaderboard</a>
+      </div>
     </div>
     ${premiumCard}
     <h3>Modules</h3>
@@ -142,7 +117,7 @@ function moduleConfig({ user, guild, module: mod, config, channels, roles, error
   const body = `
     <div class="tabbar">
       <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
-      <a class="active" href="/dashboard/${guild.id}/modules/${esc(mod.key)}">${esc(MODULE_ICONS[mod.key] || '🧩')} ${esc(mod.name)}</a>
+      <a class="active" href="/dashboard/${guild.id}/modules/${esc(mod.key)}">${esc(mod.name)}</a>
     </div>
     ${err}
     <h2>${esc(mod.name)} configuration</h2>
@@ -277,7 +252,7 @@ function transcriptPage({ guild, ticket }) {
         .map((a) =>
           /\.(png|jpe?g|gif|webp)$/i.test(a.url)
             ? `<a class="tr-img" href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.url)}" alt="" loading="lazy"></a>`
-            : `<a class="tr-file" href="${esc(a.url)}" target="_blank" rel="noopener">📎 ${esc(a.name || a.url)}</a>`
+            : `<a class="tr-file" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.name || a.url)}</a>`
         )
         .join('');
       const embeds = m.embeds ? '<div class="tr-embed">Embed message</div>' : '';
@@ -294,7 +269,6 @@ function transcriptPage({ guild, ticket }) {
   const body = `
     <div class="tr-wrap">
       <div class="tr-head">
-        <div class="tr-icon">🎫</div>
         <div>
           <div class="tr-title">${esc(guild.name)} — Ticket transcript</div>
           <div class="tr-sub">${esc(ticket.category || 'General')} · ${esc(ticket.status)} · opened ${fmt(ticket.created_at)}${ticket.closed_at ? ` · closed ${fmt(ticket.closed_at)}` : ''} · by <b>${esc(ticket.user_id)}</b></div>
@@ -356,7 +330,7 @@ function ownerPage({ user, stats, notice }) {
     ${notice}
     <div class="tabbar"><a class="active" href="/owner">Owner dashboard</a><a href="/dashboard">‹ Back to dashboard</a></div>
     <div class="guild-header">
-      <div><div class="gh-name">🪐 Owner dashboard</div><div class="gh-id">bot status · global stats · premium management</div></div>
+      <div><div class="gh-name">Owner dashboard</div><div class="gh-id">bot status · global stats · premium management</div></div>
     </div>
     <div class="stat-grid">
       ${statCard('Servers', stats.guilds)}
@@ -414,18 +388,11 @@ function ownerPage({ user, stats, notice }) {
 // ── Premium dashboard tabs ───────────────────────────────────────────────
 
 const PREMIUM_TABS = [
-  { key: 'analytics', label: '📊 Analytics', href: (id) => `/dashboard/${id}/analytics` },
-  { key: 'ai', label: '🤖 AI Center', href: (id) => `/dashboard/${id}/ai` },
-  { key: 'automation', label: '⚙️ Automation', href: (id) => `/dashboard/${id}/automation` },
-  { key: 'servers', label: '🌐 Multi-Server', href: (id) => `/dashboard/${id}/servers` },
+  { key: 'analytics', label: 'Analytics', href: (id) => `/dashboard/${id}/analytics` },
+  { key: 'ai', label: 'AI Center', href: (id) => `/dashboard/${id}/ai` },
+  { key: 'automation', label: 'Automation', href: (id) => `/dashboard/${id}/automation` },
+  { key: 'servers', label: 'Multi-Server', href: (id) => `/dashboard/${id}/servers` },
 ];
-
-/** Tab bar links for the premium tabs; locked when the server has no premium. */
-function premiumTabs(guildId, isPremium) {
-  return PREMIUM_TABS.map(
-    (t) => (isPremium ? `<a href="${t.href(guildId)}">${t.label}</a>` : `<a class="locked" href="/premium" title="Premium feature">🔒 ${t.label}</a>`)
-  ).join('');
-}
 
 /** Small local-time formatter for the premium tabs. */
 function fmtLocal(iso) {
@@ -433,7 +400,7 @@ function fmtLocal(iso) {
   return new Date(iso).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const EVENT_LABELS = { join: '🎉 Join', leave: '👋 Leave', kick: '🦵 Kick', ban: '⛔ Ban', unban: '🟢 Unban' };
+const EVENT_LABELS = { join: 'Join', leave: 'Leave', kick: 'Kick', ban: 'Ban', unban: 'Unban' };
 
 /** Premium Analytics tab: activity chart, totals and member event feed. */
 function analyticsPage({ user, guild, series, events, totals, isPremium }) {
@@ -461,14 +428,9 @@ function analyticsPage({ user, guild, series, events, totals, isPremium }) {
   const card = (label, value) => `<div class="stat-card"><span class="value">${esc(String(value))}</span><span class="label">${esc(label)}</span></div>`;
   const net = totals.joins - totals.leaves;
   const body = `
-    <div class="tabbar">
-      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
-      <a href="/dashboard/${guild.id}">Overview</a>
-      <a class="active" href="/dashboard/${guild.id}/analytics">📊 Analytics</a>
-      ${premiumTabs(guild.id, isPremium)}
-    </div>
+    ${serverTabs({ guild, active: 'analytics', isPremium })}
     <div class="guild-header">
-      <div><div class="gh-name">📊 Analytics · ${esc(guild.name)}</div><div class="gh-id">last 30 days · live rollups</div></div>
+      <div><div class="gh-name">Analytics · ${esc(guild.name)}</div><div class="gh-id">last 30 days · live rollups</div></div>
     </div>
     <div class="stat-grid">
       ${card('Messages (30d)', totals.messages)}
@@ -496,14 +458,9 @@ function aiCenterPage({ user, guild, usage, enabled, chatModel, imageModel, isPr
   const toggle = enabled ? 'disable' : 'enable';
   const toggleLabel = enabled ? 'Disable AI for this server' : 'Enable AI for this server';
   const body = `
-    <div class="tabbar">
-      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
-      <a href="/dashboard/${guild.id}">Overview</a>
-      <a class="active" href="/dashboard/${guild.id}/ai">🤖 AI Center</a>
-      ${premiumTabs(guild.id, isPremium)}
-    </div>
+    ${serverTabs({ guild, active: 'ai', isPremium })}
     <div class="guild-header">
-      <div><div class="gh-name">🤖 AI Center · ${esc(guild.name)}</div><div class="gh-id">OpenRouter powered · usage since the bot started tracking</div></div>
+      <div><div class="gh-name">AI Center · ${esc(guild.name)}</div><div class="gh-id">OpenRouter powered · usage since the bot started tracking</div></div>
     </div>
     <div class="stat-grid">
       ${card('Prompts', usage.prompts)}
@@ -534,7 +491,7 @@ function aiCenterPage({ user, guild, usage, enabled, chatModel, imageModel, isPr
 
 /** Premium Automation tab: scheduled tasks + scheduled messages. */
 function automationPage({ user, guild, tasks, channels, isPremium }) {
-  const typeLabel = (t) => (t.type === 'slowmode_release' ? '⏱️ Slowmode reset' : '💬 Scheduled message');
+  const typeLabel = (t) => (t.type === 'slowmode_release' ? 'Slowmode reset' : 'Scheduled message');
   const rows = tasks
     .map(
       (t) => `
@@ -555,14 +512,9 @@ function automationPage({ user, guild, tasks, channels, isPremium }) {
     .join('');
   const channelOptions = channels.map((c) => `<option value="${esc(c.id)}">#${esc(c.name)}</option>`).join('');
   const body = `
-    <div class="tabbar">
-      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
-      <a href="/dashboard/${guild.id}">Overview</a>
-      <a class="active" href="/dashboard/${guild.id}/automation">⚙️ Automation</a>
-      ${premiumTabs(guild.id, isPremium)}
-    </div>
+    ${serverTabs({ guild, active: 'automation', isPremium })}
     <div class="guild-header">
-      <div><div class="gh-name">⚙️ Automation · ${esc(guild.name)}</div><div class="gh-id">timed slowmode releases + scheduled messages</div></div>
+      <div><div class="gh-name">Automation · ${esc(guild.name)}</div><div class="gh-id">timed slowmode releases + scheduled messages</div></div>
     </div>
     <h3>Schedule a message</h3>
     <div class="card" style="max-width:560px">
@@ -608,10 +560,10 @@ function multiServerPage({ user, guilds, isPremium }) {
   const body = `
     <div class="tabbar">
       <a href="/dashboard">‹ Back to servers</a>
-      <a class="active" href="/dashboard/multi">🌐 Multi-Server</a>
+      <a class="active" href="/dashboard/multi">Multi-Server</a>
     </div>
     <div class="guild-header">
-      <div><div class="gh-name">🌐 Multi-Server</div><div class="gh-id">every server you manage, in one view</div></div>
+      <div><div class="gh-name">Multi-Server</div><div class="gh-id">every server you manage, in one view</div></div>
     </div>
     <p class="muted">Premium is per-server. Transfer premium between servers you own from each server's overview page.</p>
     <div class="card" style="padding:6px 18px 18px;overflow-x:auto;margin-top:16px">
@@ -623,12 +575,31 @@ function multiServerPage({ user, guilds, isPremium }) {
   return layout({ title: 'Multi-Server', user, content: body });
 }
 
+/** Tab bar for a server: back link, overview + premium tabs (single source). */
+function serverTabs({ guild, active, isPremium }) {
+  const id = guild.id;
+  const tabs = [
+    { key: 'overview', label: 'Overview', href: `/dashboard/${id}` },
+    ...PREMIUM_TABS.map((t) => ({ ...t, href: t.href(id) })),
+  ];
+  const backHref = active === 'overview' ? '/dashboard' : `/dashboard/${id}`;
+  const items = [
+    `<a href="${backHref}">‹ ${esc(guild.name)}</a>`,
+    ...tabs.map((t) => {
+      const isActive = t.key === active;
+      const locked = !isPremium && !isActive;
+      const cls = [isActive ? 'active' : '', locked ? 'locked' : ''].filter(Boolean).join(' ');
+      return `<a${cls ? ` class="${cls}"` : ''} href="${locked ? '/premium' : t.href}">${t.label}</a>`;
+    }),
+  ];
+  return `<div class="tabbar">${items.join('')}</div>`;
+}
+
 /** Full-page error screen: big gradient code, icon, message, back buttons. */
 function errorPage({ status, message, user, back = '/' }) {
   const meta = ERROR_META[status] || ERROR_META[500];
   const body = `
     <div class="error-page">
-      <div class="error-ico">${meta.ico}</div>
       <div class="error-code">${esc(String(status))}</div>
       <div class="error-title">${esc(meta.title)}</div>
       ${message ? `<p class="error-msg">${esc(message)}</p>` : ''}
@@ -642,13 +613,13 @@ function errorPage({ status, message, user, back = '/' }) {
 }
 
 const ERROR_META = {
-  400: { ico: '🤔', title: 'Bad request' },
-  401: { ico: '🔐', title: 'Not signed in' },
-  403: { ico: '⛔', title: 'Forbidden' },
-  404: { ico: '🛸', title: 'Page not found' },
-  500: { ico: '💥', title: 'Something went wrong' },
-  502: { ico: '🌐', title: 'Upstream error' },
-  503: { ico: '🔧', title: 'Temporarily unavailable' },
+  400: { title: 'Bad request' },
+  401: { title: 'Not signed in' },
+  403: { title: 'Forbidden' },
+  404: { title: 'Page not found' },
+  500: { title: 'Something went wrong' },
+  502: { title: 'Upstream error' },
+  503: { title: 'Temporarily unavailable' },
 };
 
 module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage, errorPage };
