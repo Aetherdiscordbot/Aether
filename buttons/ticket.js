@@ -37,10 +37,15 @@ module.exports = {
         return showRemoveModal(interaction);
       case 'transcript': {
         if (!isStaff) return deny(interaction);
+        const ticket = ticketService.getTicketByChannel(interaction.channel.id);
         const transcript = await ticketService.generateTranscript(interaction.channel);
+        if (ticket) ticketService.saveTranscript(ticket.id, transcript);
         const buffer = Buffer.from(transcript.text, 'utf8');
+        const link = ticket
+          ? `\nView online: ${ticketService.transcriptUrl(interaction.guildId, ticket.id)}`
+          : '';
         return interaction.reply({
-          embeds: [infoEmbed('Here is the current transcript.')],
+          embeds: [infoEmbed(`Here is the current transcript.${link}`)],
           files: [{ name: `transcript-${interaction.channel.id}.txt`, attachment: buffer }],
           ephemeral: true,
         });

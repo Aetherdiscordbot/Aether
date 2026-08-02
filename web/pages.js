@@ -259,4 +259,57 @@ function transferForm({ guildId, premiumServers }) {
     </form>`;
 }
 
-module.exports = { serverList, serverOverview, moduleConfig };
+/** Public ticket transcript page: Discord-style message log. */
+function transcriptPage({ guild, ticket }) {
+  const fmt = (iso) =>
+    iso
+      ? new Date(iso).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : '—';
+
+  const messageRows = (ticket.data || [])
+    .map((m) => {
+      const time = fmt(m.timestamp);
+      const content = m.content ? `<div class="tr-content">${esc(m.content)}</div>` : '';
+      const attachments = (m.attachments || [])
+        .map((a) =>
+          /\.(png|jpe?g|gif|webp)$/i.test(a.url)
+            ? `<a class="tr-img" href="${esc(a.url)}" target="_blank" rel="noopener"><img src="${esc(a.url)}" alt="" loading="lazy"></a>`
+            : `<a class="tr-file" href="${esc(a.url)}" target="_blank" rel="noopener">📎 ${esc(a.name || a.url)}</a>`
+        )
+        .join('');
+      const embeds = m.embeds ? '<div class="tr-embed">Embed message</div>' : '';
+      return `<div class="tr-msg">
+        <img class="tr-ava" src="${esc(m.author?.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png')}" alt="" loading="lazy">
+        <div class="tr-body">
+          <div class="tr-meta"><span class="tr-author">${esc(m.author?.tag || m.author?.id || 'Unknown')}</span><span class="tr-time">${time}</span></div>
+          ${content}${attachments}${embeds}
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  const body = `
+    <div class="tr-wrap">
+      <div class="tr-head">
+        <div class="tr-icon">🎫</div>
+        <div>
+          <div class="tr-title">${esc(guild.name)} — Ticket transcript</div>
+          <div class="tr-sub">${esc(ticket.category || 'General')} · ${esc(ticket.status)} · opened ${fmt(ticket.created_at)}${ticket.closed_at ? ` · closed ${fmt(ticket.closed_at)}` : ''} · by <b>${esc(ticket.user_id)}</b></div>
+        </div>
+      </div>
+      <div class="tr-card">
+        ${messageRows || (ticket.text ? `<pre class="tr-pre">${esc(ticket.text)}</pre>` : '<div class="tr-note">No transcript recorded for this ticket.</div>')}
+      </div>
+      <p class="muted center" style="margin-top:18px">Powered by <a href="/">Aether</a> · transcript for ticket <code>${esc(ticket.id)}</code></p>
+    </div>`;
+
+  return layout({ title: `Transcript · ${guild.name}`, user: null, content: body });
+}
+
+module.exports = { serverList, serverOverview, moduleConfig, transcriptPage };

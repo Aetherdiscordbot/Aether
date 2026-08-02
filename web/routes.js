@@ -295,6 +295,27 @@ function buildRouter(getClient, opts = {}) {
     res.send(layout({ title: `${guildName} · Leaderboard`, user: currentUser(req), content: body }));
   });
 
+  // ── Public: ticket transcript viewer ───────────────────────────────────
+  router.get('/transcript/:guildId/:ticketId', async (req, res) => {
+    const { guildId, ticketId } = req.params;
+    if (!/^\d{10,20}$/.test(guildId) || !/^[0-9a-f-]{36}$/i.test(ticketId)) {
+      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Transcript not found.') }));
+    }
+    const ticketService = require('../modules/tickets/ticketService');
+    const ticket = ticketService.getTranscript(ticketId);
+    if (!ticket || ticket.guild_id !== guildId) {
+      return res.status(404).send(layout({ title: 'Not found', user: currentUser(req), content: alert('error', 'Transcript not found.') }));
+    }
+    const client = getClient();
+    const discordGuild = client?.guilds.cache.get(guildId);
+    res.send(
+      pages.transcriptPage({
+        guild: { name: discordGuild ? discordGuild.name : `Server ${guildId}` },
+        ticket,
+      })
+    );
+  });
+
   // ── OAuth: login/callback/logout ───────────────────────────────────────
   router.get('/login', (req, res) => {
     if (!authService.isConfigured()) {

@@ -8,6 +8,7 @@ const db = require('../../database/db');
 const settings = require('../../services/settings');
 const logService = require('../../services/logService');
 const premiumService = require('../../services/premium');
+const config = require('../../config/config');
 const logger = require('../../services/logger');
 const { baseEmbed, Colors, truncate, infoEmbed } = require('../../utils/discord');
 const { timestamp } = require('../../utils/time');
@@ -156,7 +157,7 @@ async function closeTicket(guild, channel, actor, reason, client) {
   let transcript = null;
   if (isPremium) {
     transcript = await generateTranscript(channel);
-    saveTranscript(ticket.id, transcript.text);
+    saveTranscript(ticket.id, transcript);
     await deliverTranscript(guild, channel, ticket, actor, transcript.text, client);
   }
 
@@ -229,10 +230,21 @@ async function removeUserFromTicket(guild, channel, target, actor) {
   return { ticket };
 }
 
-/** Generate a plaintext transcript of a channel. */
+/** Generate a transcript of a channel: plaintext + structured message data. */
 async function generateTranscript(channel) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const sorted = [...messages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+  const data = sorted.map((m) => ({
+    author: {
+      id: m.author.id,
+      tag: m.author.tag,
+      avatarUrl: m.author.displayAvatarURL({ size: 64 }),
+    },
+    content: m.content || '',
+    timestamp: new Date(m.createdTimestamp).toISOString(),
+    attachments: m.attachments.map((a) => ({ url: a.url, name: a.name })),
+    embeds: m.embeds.length,
+  }));
   const lines = sorted.map((m) => {
     const time = new Date(m.createdTimestamp).toLocaleString('en-US');
     const content = m.content || (m.attachments.size ? m.attachments.map((a) => a.url).join(' ') : '*embed/message*');
@@ -240,22 +252,60 @@ async function generateTranscript(channel) {
   });
   return {
     text: `Transcript for #${channel.name} (${channel.id})\nGenerated ${new Date().toISOString()}\n\n` + lines.join('\n'),
+    data,
     messages: sorted,
   };
 }
 
-function saveTranscript(ticketId, text) {
-  db.prepare('UPDATE tickets SET transcript = ? WHERE id = ?').run(text, ticketId);
+/** Store a transcript as JSON (text + structured messages). */
+function saveTranscript(ticketId, transcript) {
+  db.prepare('UPDATE tickets SET transcript = ? WHERE id = ?').run(
+    JSON.stringify({ text: transcript.text, data: transcript.data }),
+    ticketId
+  );
+}
+
+/** Load a transcript, tolerating the legacy plaintext format. */
+function getTranscript(ticketId) {
+  const row = db
+    .prepare('SELECT id, guild_id, channel_id, user_id, category, status, created_at, closed_at, transcript FROM tickets WHERE id = ?')
+    .get(ticketId);
+  if (!row) return null;
+  let parsed = null;
+  try {
+    parsed = JSON.parse(row.transcript);
+  } catch {
+    parsed = null;
+  }
+  return {
+    ...row,
+    text: parsed?.text || row.transcript,
+    data: parsed?.data || null,
+  };
+}
+
+/** Public web URL for a ticket transcript. */
+function transcriptUrl(guildId, ticketId) {
+  const base = config.web.baseUrl || 'https://aether.ocrp.cc';
+  return `${base.replace(/\/+$/, '')}/transcript/${guildId}/${ticketId}`;
 }
 
 async function deliverTranscript(guild, channel, ticket, actor, text, client) {
   const buffer = Buffer.from(text, 'utf8');
   const attachment = { name: `transcript-${channel.id}.txt`, attachment: buffer };
   const cfg = getConfig(guild.id);
+  const link = transcriptUrl(guild.id, ticket.id);
 
   // DM to owner (premium).
   const owner = await client.users.fetch(ticket.user_id).catch(() => null);
-  if (owner) owner.send({ files: [attachment] }).catch(() => {});
+  if (owner) {
+    owner
+      .send({
+        embeds: [infoEmbed(`📄 Transcript for ${channel}\nView online: ${link}`)],
+        files: [attachment],
+      })
+      .catch(() => {});
+  }
 
   // Copy to configured transcript channel, else ticket log.
   const dest = cfg.transcriptChannelId
@@ -266,7 +316,7 @@ async function deliverTranscript(guild, channel, ticket, actor, text, client) {
   if (dest?.isTextBased()) {
     await dest
       .send({
-        embeds: [infoEmbed(`Transcript for ${channel} (closed by ${actor})`)],
+        embeds: [infoEmbed(`Transcript for ${channel} (closed by ${actor})\nView online: ${link}`)],
         files: [attachment],
       })
       .catch(() => {});
@@ -321,6 +371,9 @@ module.exports = {
   addUserToTicket,
   removeUserFromTicket,
   generateTranscript,
+  saveTranscript,
+  getTranscript,
+  transcriptUrl,
   actionRow,
   openLimitFor,
   buildPanel,

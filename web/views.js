@@ -327,6 +327,38 @@ input[type=checkbox]:checked::after { transform: translateX(18px); background: #
 .lb-total { font-weight: 700; color: var(--muted); white-space: nowrap; font-size: 14px; }
 .lb-hero-icon { display: inline-block; }
 
+/* ── Ticket transcript page ────────────────────────────────────────── */
+.tr-wrap { max-width: 780px; margin: 0 auto; }
+.tr-head { display: flex; align-items: center; gap: 16px; justify-content: center; margin: 26px 0 20px; }
+.tr-icon {
+  width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center;
+  font-size: 26px; border: 1px solid var(--border-2);
+  background: linear-gradient(135deg, rgba(139,92,246,.25), rgba(34,211,238,.15));
+}
+.tr-title { font-family: var(--display); font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.tr-sub { color: var(--muted); font-size: 13px; }
+.tr-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  padding: 8px 22px;
+}
+.tr-msg { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.tr-msg:last-child { border-bottom: none; }
+.tr-ava { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--border-2); flex-shrink: 0; }
+.tr-body { flex: 1; min-width: 0; }
+.tr-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.tr-author { font-weight: 700; font-size: 14px; color: #c4b5fd; }
+.tr-time { color: var(--muted); font-size: 11px; }
+.tr-content { font-size: 14.5px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+.tr-img img { max-width: 100%; max-height: 420px; border-radius: 12px; margin-top: 6px; border: 1px solid var(--border); }
+.tr-file { display: inline-block; margin-top: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(139,92,246,.1); font-size: 13px; }
+.tr-embed {
+  margin-top: 6px; padding: 10px 14px; border-radius: 10px; border-left: 3px solid var(--border-2);
+  background: rgba(255,255,255,.03); color: var(--muted); font-size: 13px;
+}
+.tr-note { text-align: center; color: var(--muted); padding: 26px 0; }
+.tr-pre { white-space: pre-wrap; font-size: 12.5px; color: var(--muted); max-height: 70vh; overflow: auto; }
+
 /* ── Premium page ──────────────────────────────────────────────────── */
 .pricing {
   max-width: 520px; margin: 0 auto;
