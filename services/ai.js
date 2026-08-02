@@ -36,7 +36,7 @@ function errMessage(err) {
   return err?.message || 'Unknown error';
 }
 
-/** Chat completion → plain text reply. */
+/** Chat completion → { text, tokens }. */
 async function chat(prompt, { system, model } = {}) {
   if (!isConfigured()) throw new Error('AI is not configured (missing OPENROUTER_API_KEY).');
   try {
@@ -54,7 +54,7 @@ async function chat(prompt, { system, model } = {}) {
     );
     const text = data?.choices?.[0]?.message?.content;
     if (!text) throw new Error('AI returned an empty response.');
-    return String(text).trim();
+    return { text: String(text).trim(), tokens: data?.usage?.total_tokens || 0 };
   } catch (err) {
     throw new Error(errMessage(err));
   }
@@ -112,7 +112,7 @@ async function image(prompt) {
       logger.debug(`AI image: unexpected response from ${model}: ${JSON.stringify(data?.choices?.[0]?.message).slice(0, 500)}`);
       throw new Error('The image model did not return an image.');
     }
-    return result;
+    return { ...result, tokens: data?.usage?.total_tokens || 0 };
   };
 
   const models = [config.ai.imageModel];

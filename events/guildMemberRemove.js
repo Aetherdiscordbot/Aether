@@ -11,6 +11,10 @@ module.exports = {
   name: 'guildMemberRemove',
   run(client, member) {
     const guild = member.guild;
+
+    // Activity tracking (premium analytics).
+    require('../services/analytics').recordMemberEvent(guild.id, 'leave', member.id);
+
     const cfg = settings.getSetting(guild.id, 'welcome', { enabled: false, leaveChannelId: null, leaveMessage: 'Goodbye {user}, we will miss you.', leaveEmbed: null });
 
     const channel = cfg.leaveChannelId ? guild.channels.cache.get(cfg.leaveChannelId) : null;

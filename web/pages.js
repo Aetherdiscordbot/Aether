@@ -69,7 +69,6 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
     ? `<img src="${esc(guild.iconUrl)}" alt="">`
     : '';
   const isActive = premium?.active === true;
-
   let premiumCard;
   if (isActive) {
     premiumCard = `
@@ -119,6 +118,7 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
     <div class="tabbar">
       <a href="/dashboard">‹ Back to servers</a>
       <a class="active" href="/dashboard/${guild.id}">Overview</a>
+      ${premiumTabs(guild.id, isActive)}
     </div>
     <div class="guild-header">
       ${icon}
@@ -411,4 +411,216 @@ function ownerPage({ user, stats, notice }) {
   return layout({ title: 'Owner dashboard', user, content: body });
 }
 
-module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage };
+// ── Premium dashboard tabs ───────────────────────────────────────────────
+
+const PREMIUM_TABS = [
+  { key: 'analytics', label: '📊 Analytics', href: (id) => `/dashboard/${id}/analytics` },
+  { key: 'ai', label: '🤖 AI Center', href: (id) => `/dashboard/${id}/ai` },
+  { key: 'automation', label: '⚙️ Automation', href: (id) => `/dashboard/${id}/automation` },
+  { key: 'servers', label: '🌐 Multi-Server', href: (id) => `/dashboard/${id}/servers` },
+];
+
+/** Tab bar links for the premium tabs; locked when the server has no premium. */
+function premiumTabs(guildId, isPremium) {
+  return PREMIUM_TABS.map(
+    (t) => (isPremium ? `<a href="${t.href(guildId)}">${t.label}</a>` : `<a class="locked" href="/premium" title="Premium feature">🔒 ${t.label}</a>`)
+  ).join('');
+}
+
+/** Small local-time formatter for the premium tabs. */
+function fmtLocal(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+const EVENT_LABELS = { join: '🎉 Join', leave: '👋 Leave', kick: '🦵 Kick', ban: '⛔ Ban', unban: '🟢 Unban' };
+
+/** Premium Analytics tab: activity chart, totals and member event feed. */
+function analyticsPage({ user, guild, series, events, totals, isPremium }) {
+  const max = Math.max(...series.map((d) => d.messages), 1);
+  const bars = series
+    .map((d) => {
+      const h = Math.max(4, Math.round((d.messages / max) * 120));
+      const tip = `${d.day} — ${d.messages} msgs · ${d.commands} cmds · +${d.joins} −${d.leaves}`;
+      return `<div class="bar-col" title="${esc(tip)}">
+        <div class="bar" style="height:${h}px"></div>
+        <span class="bar-day">${d.day.slice(8)}</span>
+      </div>`;
+    })
+    .join('');
+  const eventsRows = events
+    .map(
+      (e) => `
+      <tr>
+        <td><span class="badge ${e.event_type === 'join' ? 'on' : e.event_type === 'ban' ? 'warn' : 'off'}">${esc(EVENT_LABELS[e.event_type] || e.event_type)}</span></td>
+        <td class="mono">${esc(shortId(e.user_id))}</td>
+        <td>${fmtLocal(e.created_at)}</td>
+      </tr>`
+    )
+    .join('');
+  const card = (label, value) => `<div class="stat-card"><span class="value">${esc(String(value))}</span><span class="label">${esc(label)}</span></div>`;
+  const net = totals.joins - totals.leaves;
+  const body = `
+    <div class="tabbar">
+      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
+      <a href="/dashboard/${guild.id}">Overview</a>
+      <a class="active" href="/dashboard/${guild.id}/analytics">📊 Analytics</a>
+      ${premiumTabs(guild.id, isPremium)}
+    </div>
+    <div class="guild-header">
+      <div><div class="gh-name">📊 Analytics · ${esc(guild.name)}</div><div class="gh-id">last 30 days · live rollups</div></div>
+    </div>
+    <div class="stat-grid">
+      ${card('Messages (30d)', totals.messages)}
+      ${card('Commands (30d)', totals.commands)}
+      ${card('Members joined', totals.joins)}
+      ${card('Members left', totals.leaves)}
+      ${card('Net growth', net > 0 ? `+${net}` : net)}
+    </div>
+    <h3 style="margin-top:30px">Messages · last 14 days</h3>
+    <div class="card chart">${bars}</div>
+    <h3 style="margin-top:30px">Recent member events</h3>
+    <div class="card" style="padding:6px 18px 18px;overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>Event</th><th>User</th><th>When</th></tr></thead>
+        <tbody>${eventsRows || '<tr><td colspan="3" class="muted center">No member events recorded yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  return layout({ title: `Analytics · ${guild.name}`, user, content: body });
+}
+
+/** Premium AI Center tab: usage stats + per-server enable toggle. */
+function aiCenterPage({ user, guild, usage, enabled, chatModel, imageModel, isPremium }) {
+  const fmtTokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const card = (label, value) => `<div class="stat-card"><span class="value">${esc(String(value))}</span><span class="label">${esc(label)}</span></div>`;
+  const toggle = enabled ? 'disable' : 'enable';
+  const toggleLabel = enabled ? 'Disable AI for this server' : 'Enable AI for this server';
+  const body = `
+    <div class="tabbar">
+      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
+      <a href="/dashboard/${guild.id}">Overview</a>
+      <a class="active" href="/dashboard/${guild.id}/ai">🤖 AI Center</a>
+      ${premiumTabs(guild.id, isPremium)}
+    </div>
+    <div class="guild-header">
+      <div><div class="gh-name">🤖 AI Center · ${esc(guild.name)}</div><div class="gh-id">OpenRouter powered · usage since the bot started tracking</div></div>
+    </div>
+    <div class="stat-grid">
+      ${card('Prompts', usage.prompts)}
+      ${card('Images generated', usage.images)}
+      ${card('Tokens used', fmtTokens(usage.tokens))}
+      ${card('Prompts today', usage.today.prompts)}
+      ${card('Images today', usage.today.images)}
+    </div>
+    <div class="grid" style="margin-top:20px">
+      <div class="card">
+        <h3>Server access</h3>
+        <p class="muted">When disabled, the <b>/ai</b> command is blocked in this server and members get a notice pointing to this page.</p>
+        <form method="post" action="/dashboard/${guild.id}/ai">
+          <input type="hidden" name="action" value="${toggle}">
+          <button class="btn ${enabled ? 'secondary' : ''}" type="submit">${enabled ? 'Disable AI' : 'Enable AI'}</button>
+        </form>
+        <p class="muted" style="margin-top:10px">Status: <span class="badge ${enabled ? 'on' : 'off'}">${enabled ? 'Enabled' : 'Disabled'}</span></p>
+      </div>
+      <div class="card">
+        <h3>Models</h3>
+        <p class="muted">Chat: <span class="mono">${esc(chatModel)}</span></p>
+        <p class="muted">Images: <span class="mono">${esc(imageModel)}</span></p>
+        <p class="muted">Managed by the bot owner in the panel environment.</p>
+      </div>
+    </div>`;
+  return layout({ title: `AI Center · ${guild.name}`, user, content: body });
+}
+
+/** Premium Automation tab: scheduled tasks + scheduled messages. */
+function automationPage({ user, guild, tasks, channels, isPremium }) {
+  const typeLabel = (t) => (t.type === 'slowmode_release' ? '⏱️ Slowmode reset' : '💬 Scheduled message');
+  const rows = tasks
+    .map(
+      (t) => `
+      <tr>
+        <td class="mono">#${t.id}</td>
+        <td>${typeLabel(t)}</td>
+        <td class="mono">${esc(shortId(t.channel_id))}</td>
+        <td>${t.type === 'scheduled_message' ? esc(String(t.payload.content || '').slice(0, 60)) : 'Reset to off'}</td>
+        <td>${fmtLocal(t.run_at)}</td>
+        <td>
+          <form method="post" action="/dashboard/${guild.id}/automation/cancel" style="display:inline">
+            <input type="hidden" name="taskId" value="${t.id}">
+            <button class="btn small" type="submit">Cancel</button>
+          </form>
+        </td>
+      </tr>`
+    )
+    .join('');
+  const channelOptions = channels.map((c) => `<option value="${esc(c.id)}">#${esc(c.name)}</option>`).join('');
+  const body = `
+    <div class="tabbar">
+      <a href="/dashboard/${guild.id}">‹ ${esc(guild.name)}</a>
+      <a href="/dashboard/${guild.id}">Overview</a>
+      <a class="active" href="/dashboard/${guild.id}/automation">⚙️ Automation</a>
+      ${premiumTabs(guild.id, isPremium)}
+    </div>
+    <div class="guild-header">
+      <div><div class="gh-name">⚙️ Automation · ${esc(guild.name)}</div><div class="gh-id">timed slowmode releases + scheduled messages</div></div>
+    </div>
+    <h3>Schedule a message</h3>
+    <div class="card" style="max-width:560px">
+      <form method="post" action="/dashboard/${guild.id}/automation/message" style="display:flex;flex-direction:column;gap:12px">
+        <div class="field" style="margin:0">
+          <label>Channel</label>
+          <select name="channelId" required>${channelOptions}</select>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Send at</label>
+          <input type="datetime-local" name="runAt" required>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Content</label>
+          <textarea name="content" rows="3" placeholder="Message the bot will post…" required></textarea>
+        </div>
+        <button class="btn" type="submit">Schedule</button>
+      </form>
+    </div>
+    <h3 style="margin-top:30px">Pending tasks (${tasks.length})</h3>
+    <div class="card" style="padding:6px 18px 18px;overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>#</th><th>Type</th><th>Channel</th><th>Details</th><th>Runs at</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="muted center">No pending tasks. Use <b>/slowmode</b> with <code>timed: true</code> to auto-reset slowmode, or schedule a message above.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  return layout({ title: `Automation · ${guild.name}`, user, content: body });
+}
+
+/** Premium Multi-Server tab: every manageable server at a glance. */
+function multiServerPage({ user, guilds, isPremium }) {
+  const rows = guilds
+    .map(
+      (g) => `
+      <tr>
+        <td><div class="server-cell">${g.iconUrl ? `<img src="${esc(g.iconUrl)}" alt="">` : ''}<b>${esc(g.name)}</b><span class="mono muted">${esc(g.id)}</span></div></td>
+        <td>${g.premium ? '<span class="badge on">✦ Premium</span>' : '<span class="badge off">Free</span>'}</td>
+        <td>${esc(String(g.modulesEnabled))}</td>
+        <td><a class="btn small" href="/dashboard/${esc(g.id)}">Open</a></td>
+      </tr>`
+    )
+    .join('');
+  const body = `
+    <div class="tabbar">
+      <a href="/dashboard">‹ Back to servers</a>
+      <a class="active" href="/dashboard/multi">🌐 Multi-Server</a>
+    </div>
+    <div class="guild-header">
+      <div><div class="gh-name">🌐 Multi-Server</div><div class="gh-id">every server you manage, in one view</div></div>
+    </div>
+    <p class="muted">Premium is per-server. Transfer premium between servers you own from each server's overview page.</p>
+    <div class="card" style="padding:6px 18px 18px;overflow-x:auto;margin-top:16px">
+      <table class="tbl">
+        <thead><tr><th>Server</th><th>Plan</th><th>Modules on</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="muted center">No manageable servers found. <a href="/invite">Invite Aether</a> to a server.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  return layout({ title: 'Multi-Server', user, content: body });
+}
+
+module.exports = { serverList, serverOverview, moduleConfig, transcriptPage, ownerPage, analyticsPage, aiCenterPage, automationPage, multiServerPage };

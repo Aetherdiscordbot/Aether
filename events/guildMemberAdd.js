@@ -14,6 +14,9 @@ module.exports = {
   run(client, member) {
     if (member.guild.id === client.user.id) return;
 
+    // Activity tracking (premium analytics).
+    require('../services/analytics').recordMemberEvent(member.guild.id, 'join', member.id);
+
     // 1) Deferred premium fulfillment (purchased before the bot joined).
     premiumService.syncMembershipGrantedFromDiscord(member.guild);
 

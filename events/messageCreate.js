@@ -8,11 +8,15 @@ const levelingService = require('../modules/leveling/levelingService');
 const securityService = require('../modules/security/securityService');
 const automodService = require('../modules/automod/automodService');
 const autoResponses = require('../services/autoResponses');
+const analytics = require('../services/analytics');
 
 module.exports = {
   name: 'messageCreate',
   async run(client, message) {
     if (!message.guild || message.author.bot) return;
+
+    // Activity tracking (premium analytics).
+    analytics.recordMessage(message.guild.id);
 
     // XP (async fire-and-forget so level announcements never block the pipeline).
     try {

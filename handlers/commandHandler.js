@@ -168,6 +168,11 @@ async function dispatch(client, interaction) {
     cooldowns.set(key, Date.now());
   }
 
+  // ── Usage tracking (premium analytics) ─────────────────────────────────
+  if (interaction.inGuild()) {
+    require('../services/analytics').recordCommand(interaction.guildId);
+  }
+
   try {
     await command.run(client, interaction);
   } catch (err) {

@@ -43,6 +43,7 @@ const MIGRATIONS = [
   require('./schema'),
   require('./schema-v2'),
   require('./schema-v3'),
+  require('./schema-v4'),
 ];
 
 /** Applies all migrations in order, tracking applied versions. */

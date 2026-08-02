@@ -56,8 +56,19 @@ ${chalk.hex('#8b5cf6').bold('  └───────────────�
     const pollService = require('../services/polls');
     scheduler.interval(20_000, () => pollService.processDue(client), 'polls');
 
+    // Fire scheduled tasks (slowmode releases, scheduled messages).
+    const scheduledTasks = require('../services/scheduledTasks');
+    scheduler.interval(15_000, () => scheduledTasks.processDue(client), 'scheduled-tasks');
+
     // Prune expired premium rows periodically.
     scheduler.interval(6 * 60 * 60 * 1000, pruneExpiredPremium, 'premium-expiry-prune');
+
+    // Keep analytics + task history small.
+    const analyticsService = require('../services/analytics');
+    scheduler.interval(24 * 60 * 60 * 1000, () => {
+      analyticsService.prune();
+      scheduledTasks.prune();
+    }, 'analytics-prune');
 
     // Daily database backup (VACUUM INTO snapshot, retention 7 days).
     const backupService = require('../services/backup');

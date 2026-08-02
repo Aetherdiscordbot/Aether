@@ -380,6 +380,140 @@ function buildRouter(getClient, opts = {}) {
     res.send(pages.serverList({ user, guilds }));
   });
 
+  // ── Premium: Multi-Server overview (all manageable servers) ────────────
+  router.get('/dashboard/multi', requireAuth, async (req, res) => {
+    const user = currentUser(req);
+    const guilds = await manageableGuilds(user);
+    if (!guilds.some((g) => premiumService.isPremium(g.id))) {
+      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This view requires Aether Premium on at least one of your servers.') }));
+    }
+    const client = getClient();
+    const withStats = guilds.map((g) => ({
+      ...g,
+      modulesEnabled: modules.MODULES.filter((m) => settings.getSetting(g.id, m.key)?.enabled ?? m.defaultEnabled === true).length,
+      iconUrl: g.iconUrl,
+      premium: premiumService.isPremium(g.id),
+      _clientGuild: client?.guilds.cache.get(g.id),
+    }));
+    res.send(pages.multiServerPage({ user, guilds: withStats, isPremium: true }));
+  });
+
+  // ── Premium: Analytics / AI / Automation / Multi-Server tabs ──────────
+  function requireGuildPremium(req, res, next) {
+    const user = currentUser(req);
+    const guild = user?.guilds?.find((g) => g.id === req.params.guildId);
+    if (!guild || !authService.canManageGuild(guild)) {
+      return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
+    }
+    if (!premiumService.isPremium(guild.id)) {
+      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This tab requires Aether Premium on this server.') }));
+    }
+    req.guild = guild;
+    req.user = user;
+    next();
+  }
+
+  router.get('/dashboard/:guildId/analytics', requireAuth, requireGuildPremium, (req, res) => {
+    const analyticsService = require('../services/analytics');
+    const guildId = req.params.guildId;
+    const series = analyticsService.activitySeries(guildId, 14);
+    const events = analyticsService.memberEvents(guildId, 25);
+    const totals = analyticsService.totals(guildId, 30);
+    res.send(pages.analyticsPage({ user: req.user, guild: { ...req.guild, iconUrl: guildIcon(req.guild) }, series, events, totals, isPremium: true }));
+  });
+
+  router.get('/dashboard/:guildId/ai', requireAuth, requireGuildPremium, (req, res) => {
+    const analyticsService = require('../services/analytics');
+    const guildId = req.params.guildId;
+    const usage = analyticsService.aiTotals(guildId);
+    const row = db.prepare('SELECT value FROM automation_config WHERE guild_id = ? AND key = ?').get(guildId, 'ai_enabled');
+    const enabled = row ? JSON.parse(row.value) !== false : true;
+    res.send(
+      pages.aiCenterPage({
+        user: req.user,
+        guild: { ...req.guild, iconUrl: guildIcon(req.guild) },
+        usage,
+        enabled,
+        chatModel: config.ai.chatModel,
+        imageModel: config.ai.imageModel,
+        isPremium: true,
+      })
+    );
+  });
+
+  router.post('/dashboard/:guildId/ai', requireAuth, requireGuildPremium, (req, res) => {
+    const guildId = req.params.guildId;
+    const enable = req.body?.action === 'enable';
+    db.prepare(
+      `INSERT INTO automation_config (guild_id, key, value) VALUES (?, 'ai_enabled', ?)
+       ON CONFLICT(guild_id, key) DO UPDATE SET value = excluded.value`
+    ).run(guildId, JSON.stringify(enable));
+    logger.info(`Dashboard: ${req.user.username} set ai_enabled=${enable} for ${guildId}`);
+    res.redirect(`/dashboard/${guildId}/ai?${enable ? 'enabled=1' : 'disabled=1'}`);
+  });
+
+  router.get('/dashboard/:guildId/automation', requireAuth, requireGuildPremium, (req, res) => {
+    const scheduledTasks = require('../services/scheduledTasks');
+    const client = getClient();
+    const discordGuild = client?.guilds.cache.get(req.params.guildId);
+    const channels = discordGuild
+      ? [...discordGuild.channels.cache.values()]
+          .filter((c) => c.isTextBased())
+          .map((c) => ({ id: c.id, name: c.name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [];
+    res.send(
+      pages.automationPage({
+        user: req.user,
+        guild: { ...req.guild, iconUrl: guildIcon(req.guild) },
+        tasks: scheduledTasks.pending(req.params.guildId),
+        channels,
+        isPremium: true,
+      })
+    );
+  });
+
+  router.post('/dashboard/:guildId/automation/message', requireAuth, requireGuildPremium, (req, res) => {
+    const scheduledTasks = require('../services/scheduledTasks');
+    const guildId = req.params.guildId;
+    const content = String(req.body?.content || '').trim();
+    const runAt = req.body?.runAt;
+    if (!content || !runAt) return res.redirect(`/dashboard/${guildId}/automation?err=1`);
+    try {
+      scheduledTasks.create({
+        guildId,
+        type: 'scheduled_message',
+        channelId: String(req.body.channelId),
+        payload: { content },
+        runAt,
+        createdBy: req.user.id,
+      });
+      logger.info(`Dashboard: ${req.user.username} scheduled a message in ${guildId}`);
+      res.redirect(`/dashboard/${guildId}/automation?ok=1`);
+    } catch (err) {
+      logger.error(`Scheduled message failed: ${err.message}`);
+      res.redirect(`/dashboard/${guildId}/automation?err=1`);
+    }
+  });
+
+  router.post('/dashboard/:guildId/automation/cancel', requireAuth, requireGuildPremium, (req, res) => {
+    const scheduledTasks = require('../services/scheduledTasks');
+    const guildId = req.params.guildId;
+    scheduledTasks.cancel(Number(req.body?.taskId), guildId);
+    res.redirect(`/dashboard/${guildId}/automation?cancelled=1`);
+  });
+
+  router.get('/dashboard/:guildId/servers', requireAuth, requireGuildPremium, async (req, res) => {
+    const guilds = await manageableGuilds(req.user);
+    const withStats = guilds.map((g) => ({
+      ...g,
+      modulesEnabled: modules.MODULES.filter((m) => settings.getSetting(g.id, m.key)?.enabled ?? m.defaultEnabled === true).length,
+      premium: premiumService.isPremium(g.id),
+    }));
+    res.send(pages.multiServerPage({ user: req.user, guilds: withStats, isPremium: true }));
+  });
+
+
   // ── Single server overview ─────────────────────────────────────────────
   router.get('/dashboard/:guildId', requireAuth, async (req, res) => {
     const user = currentUser(req);

@@ -4,6 +4,7 @@
  */
 const { baseEmbed, Colors, errorEmbed } = require('../../utils/discord');
 const aiService = require('../../services/ai');
+const analytics = require('../../services/analytics');
 const { sub, str, req } = require('../../utils/commandBuilder');
 
 const SYSTEM = {
@@ -27,14 +28,20 @@ module.exports = {
     if (!aiService.isConfigured()) {
       return interaction.reply({ embeds: [errorEmbed('AI is not configured on this bot yet.')], ephemeral: true });
     }
+    if (aiEnabled(interaction.guildId) === false) {
+      return interaction.reply({ embeds: [errorEmbed('AI is disabled for this server. Enable it in the dashboard → AI Center.')], ephemeral: true });
+    }
     await interaction.deferReply();
 
     const subCmd = interaction.options.getSubcommand();
+    const record = (extra = {}) =>
+      analytics.recordAiUsage(interaction.guildId, { prompts: 1, images: 0, ...extra });
 
     try {
       if (subCmd === 'ask') {
-        const answer = await aiService.chat(interaction.options.getString('prompt'));
-        return interaction.editReply({ embeds: [aiEmbed(client, '✨ AI', answer)] });
+        const { text } = await aiService.chat(interaction.options.getString('prompt'));
+        record();
+        return interaction.editReply({ embeds: [aiEmbed(client, '✨ AI', text)] });
       }
 
       if (subCmd === 'image') {
@@ -46,34 +53,51 @@ module.exports = {
           footer: { text: 'This can take up to a minute' },
         });
         await interaction.editReply({ embeds: [loading] });
-        const { buffer } = await aiService.image(prompt);
+        const { buffer, tokens } = await aiService.image(prompt);
+        record({ prompts: 0, images: 1, tokens });
         const embed = baseEmbed({ color: Colors.primary, title: '🎨 Generated image', description: `*${prompt.slice(0, 1024)}*` });
         return interaction.editReply({ embeds: [embed], files: [{ attachment: buffer, name: 'aether-ai.png' }] });
       }
 
       if (subCmd === 'summarize') {
-        const answer = await aiService.chat(interaction.options.getString('text'), { system: SYSTEM.summarize });
-        return interaction.editReply({ embeds: [aiEmbed(client, '📝 Summary', answer)] });
+        const { text, tokens } = await aiService.chat(interaction.options.getString('text'), { system: SYSTEM.summarize });
+        record({ tokens });
+        return interaction.editReply({ embeds: [aiEmbed(client, '📝 Summary', text)] });
       }
 
       if (subCmd === 'translate') {
         const lang = interaction.options.getString('language');
-        const answer = await aiService.chat(interaction.options.getString('text'), {
+        const { text, tokens } = await aiService.chat(interaction.options.getString('text'), {
           system: `${SYSTEM.translate} Target language: ${lang}.`,
         });
-        return interaction.editReply({ embeds: [aiEmbed(client, `🌐 Translated (${lang})`, answer)] });
+        record({ tokens });
+        return interaction.editReply({ embeds: [aiEmbed(client, `🌐 Translated (${lang})`, text)] });
       }
 
       const style = interaction.options.getString('style') || 'clear';
-      const answer = await aiService.chat(interaction.options.getString('text'), {
+      const { text, tokens } = await aiService.chat(interaction.options.getString('text'), {
         system: `${SYSTEM.rewrite} Requested style: ${style}.`,
       });
-      return interaction.editReply({ embeds: [aiEmbed(client, `✍️ Rewritten (${style})`, answer)] });
+      record({ tokens });
+      return interaction.editReply({ embeds: [aiEmbed(client, `✍️ Rewritten (${style})`, text)] });
     } catch (err) {
       return interaction.editReply({ embeds: [errorEmbed(`AI request failed: ${err.message}`)] });
     }
   },
 };
+
+/** Per-server AI toggle stored in automation_config (dashboard → AI Center). */
+function aiEnabled(guildId) {
+  try {
+    const row = require('../../database/db')
+      .prepare('SELECT value FROM automation_config WHERE guild_id = ? AND key = ?')
+      .get(guildId, 'ai_enabled');
+    if (!row) return true; // default: enabled
+    return JSON.parse(row.value) !== false;
+  } catch {
+    return true;
+  }
+}
 
 function aiEmbed(client, title, text) {
   return baseEmbed({
