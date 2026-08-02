@@ -41,12 +41,21 @@ const config = {
     invitePermissions: 8,
   },
 
+  // OpenRouter AI (premium /ai commands).
+  ai: {
+    openRouterKey: process.env.OPENROUTER_API_KEY || '',
+    chatModel: process.env.OPENROUTER_CHAT_MODEL || 'openai/gpt-4o-mini',
+    imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.0-flash-preview-image-generation',
+    maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS || '1000', 10),
+  },
+
   whop: {
     apiKey: process.env.WHOP_API_KEY || '',
     webhookSecret: process.env.WHOP_WEBHOOK_SECRET || '',
     companyId: process.env.WHOP_COMPANY_ID || '',
     productId: process.env.WHOP_PRODUCT_ID || '',
     checkoutUrl: process.env.WHOP_CHECKOUT_URL || 'https://whop.com',
+    price: process.env.WHOP_PRICE || '5.99',
     // Statuses that still count as an active paid membership.
     activeStatuses: ['active', 'trialing'],
     // Checkout custom-field IDs that carry the Discord identity.

@@ -18,6 +18,7 @@ module.exports = {
     'backup',
     'embed',
     'giveaway',
+    'ai',
   ],
   subcommands: {
     economy: ['setup', 'shop-add', 'shop-remove', 'config'],
