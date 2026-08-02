@@ -28,6 +28,7 @@ const MODULES = [
       staffRoles: { label: 'Staff roles', type: 'roleList' },
       logChannelId: { label: 'Log channel', type: 'channel' },
       transcriptChannelId: { label: 'Transcript channel', type: 'channel' },
+      panelChannelId: { label: 'Panel channel', type: 'channel', help: 'Where the open-ticket panel is posted (re-sent on save)' },
       welcomeMessage: { label: 'Welcome message', type: 'textarea', default: 'Welcome {user}!\nA staff member will be with you shortly. Please describe your issue in detail.' },
       openLimit: { label: 'Open ticket limit (free)', type: 'number', default: 3 },
       premiumOpenLimit: { label: 'Open ticket limit (premium)', type: 'number', default: 15 },
@@ -196,42 +197,45 @@ function setPath(obj, path, value) {
  * Values match what the module services actually read (see type docs above).
  */
 function parseModuleConfig(mod, form) {
+  // express.urlencoded (extended:false) turns duplicate keys into arrays;
+  // take the last value for single-valued fields.
+  const last = (raw) => (Array.isArray(raw) ? raw[raw.length - 1] : raw);
   const out = {};
-  if (form.enabled !== undefined) out.enabled = form.enabled === 'on';
+  if (form.enabled !== undefined) out.enabled = last(form.enabled) === 'on';
   for (const [key, def] of Object.entries(mod.fields || {})) {
     const raw = form[key];
+    if (raw === undefined) continue;
     let value;
     switch (def.type) {
       case 'boolean':
-        // Hidden input guarantees a value: 'on' when checked, absent → false.
-        value = raw === 'on';
+        value = last(raw) === 'on';
         break;
       case 'number': {
-        const n = parseFloat(raw);
+        const n = parseFloat(last(raw));
         value = Number.isFinite(n) ? n : undefined;
         break;
       }
       case 'numberList': {
-        const parts = String(raw || '').split(',').map((s) => parseFloat(s.trim())).filter(Number.isFinite);
+        const parts = String(last(raw) ?? '').split(',').map((s) => parseFloat(s.trim())).filter(Number.isFinite);
         value = parts.length ? parts : undefined;
         break;
       }
       case 'list':
-        value = String(raw || '').split(',').map((s) => s.trim()).filter(Boolean);
+        value = String(last(raw) ?? '').split(',').map((s) => s.trim()).filter(Boolean);
         break;
       case 'channel':
       case 'role':
-        value = String(raw || '').trim() || null;
+        value = String(last(raw) ?? '').trim() || null;
         break;
       case 'roleList':
       case 'channelList':
         value = Array.isArray(raw) ? raw.map(String) : raw ? [String(raw)] : [];
         break;
       case 'select':
-        value = def.options.includes(raw) ? raw : def.default || undefined;
+        value = def.options.includes(last(raw)) ? last(raw) : def.default || undefined;
         break;
       default: // text, textarea
-        value = String(raw ?? '').trim() || null;
+        value = String(last(raw) ?? '').trim() || null;
     }
     if (value === undefined) continue;
     setPath(out, key, value);

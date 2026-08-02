@@ -3,7 +3,7 @@
  * Configuration under the `ticket` settings key.
  */
 const { randomUUID } = require('crypto');
-const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const db = require('../../database/db');
 const settings = require('../../services/settings');
 const logService = require('../../services/logService');
@@ -277,6 +277,38 @@ function slug(str) {
   return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ticket';
 }
 
+/** Build the ticket panel embed + select menu for a guild's config. */
+function buildPanel(guild, cfg) {
+  const categories = cfg.categories?.length ? cfg.categories : [{ name: 'General', description: 'General support' }];
+  const options = categories
+    .slice(0, 25)
+    .map((c) => ({
+      label: c.name,
+      value: c.name,
+      description: (c.description || '').slice(0, 100) || undefined,
+      emoji: c.emoji || undefined,
+    }));
+
+  const embed = baseEmbed({
+    color: Colors.primary,
+    title: '🎫 Support Tickets',
+    description:
+      'Need help? Open a ticket below and a member of staff will assist you as soon as possible.\n\n' +
+      '**Please note:**\n• One ticket per topic\n• Be respectful to staff\n• Do not ping staff unnecessarily',
+    footer: { text: 'Select a category to open a ticket' },
+  });
+  const select = new StringSelectMenuBuilder().setCustomId('ticket:create').setPlaceholder('Choose a category…').addOptions(options);
+  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(select)] };
+}
+
+/** Send the ticket panel to a channel (used by /ticket panel and the dashboard). */
+async function sendPanel(guild, channel) {
+  const cfg = getConfig(guild.id);
+  const payload = buildPanel(guild, cfg);
+  await channel.send(payload);
+  return payload;
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   getConfig,
@@ -291,4 +323,6 @@ module.exports = {
   generateTranscript,
   actionRow,
   openLimitFor,
+  buildPanel,
+  sendPanel,
 };

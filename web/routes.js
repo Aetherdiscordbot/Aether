@@ -298,6 +298,35 @@ function buildRouter(getClient, opts = {}) {
     const existing = settings.getSetting(guild.id, mod.key, {});
     settings.setSetting(guild.id, mod.key, deepMerge(existing, parsed));
     logger.info(`Dashboard: ${user.username} updated ${mod.key} config for ${guild.id}`);
+
+    // Verification: (re)send the panel to the configured channel so the save
+    // actually takes effect, mirroring /verify setup.
+    if (mod.key === 'verification') {
+      const cfg = settings.getSetting(guild.id, 'verification', {});
+      const client = getClient();
+      const discordGuild = client?.guilds.cache.get(guild.id);
+      const channel = discordGuild?.channels.cache.get(cfg.channelId);
+      if (cfg.enabled && cfg.roleId && channel?.isTextBased()) {
+        require('../modules/verification/verificationService')
+          .publishPanel(discordGuild, channel)
+          .catch((err) => logger.error(`Dashboard: verification panel publish failed: ${err.message}`));
+      }
+    }
+
+    // Tickets: (re)send the open-ticket panel to the configured panel channel,
+    // mirroring /ticket panel.
+    if (mod.key === 'ticket') {
+      const cfg = settings.getSetting(guild.id, 'ticket', {});
+      const client = getClient();
+      const discordGuild = client?.guilds.cache.get(guild.id);
+      const channel = discordGuild?.channels.cache.get(cfg.panelChannelId);
+      if (cfg.enabled && channel?.isTextBased()) {
+        require('../modules/tickets/ticketService')
+          .sendPanel(discordGuild, channel)
+          .catch((err) => logger.error(`Dashboard: ticket panel publish failed: ${err.message}`));
+      }
+    }
+
     res.redirect(`/dashboard/${guild.id}/modules/${mod.key}?saved=1`);
   });
 

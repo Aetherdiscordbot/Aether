@@ -1,8 +1,7 @@
 /**
  * /ticket — ticket system management.
  */
-const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
-const { baseEmbed, Colors, successEmbed, errorEmbed, infoEmbed } = require('../../utils/discord');
+const { successEmbed, errorEmbed } = require('../../utils/discord');
 const ticketService = require('../../modules/tickets/ticketService');
 const premiumService = require('../../services/premium');
 const { str, channel, role, sub, req, mention } = require('../../utils/commandBuilder');
@@ -83,25 +82,7 @@ async function setup(client, interaction) {
 
 async function panel(client, interaction) {
   const channel = interaction.options.getChannel('channel');
-  const cfg = ticketService.getConfig(interaction.guildId);
-
-  const embed = baseEmbed({
-    color: Colors.primary,
-    title: '🎫 Support Tickets',
-    description:
-      'Need help? Open a ticket below and a member of staff will assist you as soon as possible.\n\n' +
-      '**Please note:**\n• One ticket per topic\n• Be respectful to staff\n• Do not ping staff unnecessarily',
-    footer: { text: 'Select a category to open a ticket' },
-  });
-
-  const categories = cfg.categories?.length ? cfg.categories : [{ name: 'General', description: 'General support' }];
-  const options = categories
-    .slice(0, 25)
-    .map((c) => ({ label: c.name, value: c.name, description: (c.description || '').slice(0, 100) || undefined, emoji: c.emoji || undefined }));
-
-  const select = new StringSelectMenuBuilder().setCustomId('ticket:create').setPlaceholder('Choose a category…').addOptions(options);
-  await channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(select)] });
-
+  await ticketService.sendPanel(interaction.guild, channel);
   return interaction.reply({ embeds: [successEmbed(`Ticket panel sent to ${channel}.`)], ephemeral: true });
 }
 
