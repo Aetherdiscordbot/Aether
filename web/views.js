@@ -87,6 +87,43 @@ a:hover { text-decoration: underline; }
 .guild-card .gname { font-weight: 700; }
 .guild-card .gid { color: var(--muted); font-size: 12px; }
 .guild-card .right { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.server-section { margin-bottom: 28px; }
+.server-section-title {
+  color: var(--muted); font-size: 12px; text-transform: uppercase;
+  letter-spacing: .8px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.server-section-title .count { background: var(--card-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 9px; font-size: 11px; }
+.server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 20px 12px; }
+.server-item { display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; }
+.server-avatar {
+  position: relative; width: 62px; height: 62px; border-radius: 50%;
+  display: block; border: 3px solid transparent;
+  transition: transform .15s ease, border-color .15s ease;
+}
+a.server-avatar:hover { transform: scale(1.1); text-decoration: none; }
+.server-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; background: var(--card-2); }
+.server-avatar.premium { border-color: var(--premium); box-shadow: 0 0 14px rgba(241,196,15,.35); }
+.server-avatar.hasbot { border-color: var(--primary); }
+.server-avatar.locked { opacity: .45; filter: grayscale(.6); }
+.server-badge {
+  position: absolute; bottom: -3px; right: -3px; width: 19px; height: 19px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff; border: 2px solid var(--bg);
+}
+.server-badge.ok { background: var(--success); }
+.server-badge.lock { background: var(--card-2); color: var(--muted); }
+.server-tooltip {
+  position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+  background: var(--card-2); color: var(--text); border: 1px solid var(--border);
+  font-size: 12px; padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .12s ease; z-index: 5;
+}
+.server-item:hover .server-tooltip { opacity: 1; }
+.invite-mini {
+  font-size: 11px; color: var(--primary); border: 1px solid var(--primary);
+  border-radius: 999px; padding: 2px 11px; text-decoration: none; font-weight: 600;
+}
+.invite-mini:hover { background: rgba(139,92,246,.15); text-decoration: none; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
 .field .help { color: var(--muted); font-size: 12px; margin-top: 4px; }

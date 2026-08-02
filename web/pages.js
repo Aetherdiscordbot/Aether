@@ -4,41 +4,43 @@
  * easy to test and reason about.
  */
 const { esc, shortId, layout, alert } = require('./views');
+const config = require('../config/config');
 
-/** Render the server list: every guild the user is in, with manage + bot status. */
+/** Render the server list: circular icons, manageable servers first. */
 function serverList({ user, guilds }) {
-  const rows = guilds
-    .map((g) => {
-      const badge = g.premium
-        ? '<span class="badge premium">✦ Premium</span>'
-        : '<span class="badge off">Free</span>';
-      const botBadge = g.botIn
-        ? '<span class="badge bot">Aether in server</span>'
-        : `<a class="btn secondary small" href="${esc(g.inviteUrl)}" target="_blank">Invite Aether</a>`;
-      const manageLink = g.manage
-        ? `<a class="btn small" href="/dashboard/${g.id}">Manage</a>`
-        : '<span class="badge off">No manage perms</span>';
-      const icon = g.iconUrl
-        ? `<img src="${esc(g.iconUrl)}" alt="">`
-        : `<img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="">`;
-      return `<div class="card guild-card">
-        ${icon}
-        <div>
-          <div class="gname">${esc(g.name)}</div>
-          <div class="gid">${esc(g.id)}</div>
-        </div>
-        <div class="right">
-          <div style="display:flex;gap:6px">${badge}${botBadge}</div>
-          <div style="display:flex;gap:6px">${manageLink}</div>
-        </div>
-      </div>`;
-    })
-    .join('');
+  const manage = guilds.filter((g) => g.manage);
+  const other = guilds.filter((g) => !g.manage);
+
+  const item = (g) => {
+    const icon = g.iconUrl
+      ? `<img src="${esc(g.iconUrl)}" alt="" loading="lazy">`
+      : `<img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="" loading="lazy">`;
+    const premiumCls = g.premium ? ' premium' : '';
+    const botCls = g.botIn ? ' hasbot' : '';
+    const badge = g.botIn ? '<span class="server-badge ok">✓</span>' : '';
+    const tooltip = `<span class="server-tooltip">${esc(g.name)}</span>`;
+    if (g.manage) {
+      const invite = g.botIn
+        ? ''
+        : `<a class="invite-mini" href="${esc(g.inviteUrl)}" target="_blank" rel="noopener">Invite</a>`;
+      return `<div class="server-item">${tooltip}<a class="server-avatar${premiumCls}${botCls}" href="/dashboard/${esc(g.id)}">${icon}${badge}</a>${invite}</div>`;
+    }
+    return `<div class="server-item">${tooltip}<span class="server-avatar locked">${icon}<span class="server-badge lock">🔒</span></span></div>`;
+  };
+
+  const section = (title, list, empty) => `
+    ${list.length ? `
+      <div class="server-section">
+        <div class="server-section-title">${title} <span class="count">${list.length}</span></div>
+        <div class="server-grid">${list.map(item).join('')}</div>
+      </div>` : ''}`;
 
   const body = `
     <h2>Your servers</h2>
-    <p class="muted">Every server you're in, with Aether status. Premium is per-server.</p>
-    ${rows || '<div class="card">No servers found. <a href="/login">Re-auth</a> to refresh your server list.</div>'}`;
+    <p class="muted">Servers you can manage with Aether appear on top. Premium is per-server.</p>
+    ${manage.length ? section('You can manage', manage) : `<div class="card">No manageable servers found. <a href="/invite">Invite Aether</a> to a server or <a href="/login">re-auth</a>.</div>`}
+    ${section('Other servers', other)}
+    ${!guilds.length ? '<div class="card">No servers found. <a href="/login">Re-auth</a> to refresh your server list.</div>' : ''}`;
 
   return layout({ title: 'Dashboard', user, content: body });
 }
@@ -48,7 +50,8 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
   const icon = guild.iconUrl
     ? `<img src="${esc(guild.iconUrl)}" alt="" style="width:64px;height:64px;border-radius:14px;vertical-align:middle">`
     : '';
-  const premiumCard = premium
+  const isActive = premium?.active === true;
+  const premiumCard = isActive
     ? `<div class="card">
          <h3>✦ Premium active</h3>
          <div class="grid">
@@ -59,21 +62,31 @@ function serverOverview({ user, guild, modules, premium, premiumServers }) {
          </div>
          ${premiumServers.length > 1 ? transferForm({ guildId: guild.id, premiumServers }) : '<p class="muted">Premium can be transferred to another server you own from your <a href="/dashboard">server list</a>.</p>'}
        </div>`
-    : `<div class="card">
-         <h3>Free plan</h3>
-         <p class="muted">This server is on the free tier. Some modules require Aether Premium.</p>
-         <a class="btn" href="/premium">Upgrade to Premium</a>
-       </div>`;
+    : premium
+      ? `<div class="card">
+           <h3>Premium expired</h3>
+           <p class="muted">This server's premium subscription has expired. Premium modules are locked until it's renewed.</p>
+           <a class="btn" href="${esc(config.whop.checkoutUrl || '/premium')}" target="_blank" rel="noopener">Renew Premium</a>
+         </div>`
+      : `<div class="card">
+           <h3>Free plan</h3>
+           <p class="muted">This server is on the free tier. Some modules require Aether Premium.</p>
+           <a class="btn" href="/premium">Upgrade to Premium</a>
+         </div>`;
 
   const moduleCards = modules
     .map((m) => {
       const state = m.enabled ? '<span class="badge on">On</span>' : '<span class="badge off">Off</span>';
-      return `<div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0">${esc(m.name)}</h3>${state}
+      const gate = m.premium && !isActive
+        ? '<span class="badge off">Premium</span>'
+        : '';
+      const disabled = m.premium && !isActive;
+      return `<div class="card"${disabled ? ' style="opacity:.55"' : ''}>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h3 style="margin:0">${esc(m.name)}</h3>${state}${gate}
         </div>
         <p class="muted" style="font-size:13px;margin-top:8px">${esc(m.description)}</p>
-        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">Configure</a>
+        <a class="btn secondary small" href="/dashboard/${guild.id}/modules/${esc(m.key)}">${disabled ? 'Locked' : 'Configure'}</a>
       </div>`;
     })
     .join('');
@@ -115,49 +128,76 @@ function moduleConfig({ user, guild, module: mod, config, channels, roles, error
 
 /** Build the field HTML for a module definition + current config. */
 function buildFields(mod, config, channels, roles) {
-  const channelOptions = channels
-    .map((c) => `<option value="${esc(c.id)}" ${String(config?.[mod.channelField] ?? '') === c.id ? 'selected' : ''}>${esc(c.name)}</option>`)
-    .join('');
-  const roleOptions = roles
-    .map((r) => `<option value="${esc(r.id)}" ${String(config?.[mod.roleField] ?? '') === r.id ? 'selected' : ''}>${esc(r.name)}</option>`)
-    .join('');
-
   const row = (label, input, help) => `<div class="field"><label>${esc(label)}</label>${input}${help ? `<div class="help">${esc(help)}</div>` : ''}</div>`;
+  const channelOptions = (field, selected) =>
+    channels
+      .filter((c) => !field.channelTypes || field.channelTypes.includes(c.type))
+      .map(
+        (c) =>
+          `<option value="${esc(c.id)}" ${String(selected ?? '') === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
+      )
+      .join('');
+  const roleOptions = (selected) =>
+    roles.map((r) => `<option value="${esc(r.id)}" ${String(selected ?? '') === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
 
   const parts = [];
-  if (mod.hasEnabled !== false) {
-    parts.push(
-      row(
-        'Enabled',
-        `<input type="checkbox" name="enabled" ${config?.enabled ? 'checked' : ''}>`,
-        'Turn this module on or off for this server.'
-      )
-    );
-  }
-  if (mod.channelField) {
-    parts.push(row(mod.channelLabel || 'Channel', `<select name="channelId"><option value="">— none —</option>${channelOptions}</select>`, mod.channelHelp));
-  }
-  if (mod.roleField) {
-    parts.push(row(mod.roleLabel || 'Role', `<select name="roleId"><option value="">— none —</option>${roleOptions}</select>`, mod.roleHelp));
-  }
+
+  // Module-level enabled toggle (hidden input so unchecking saves false).
+  parts.push(
+    row(
+      'Enabled',
+      `<input type="hidden" name="enabled" value="off"><input type="checkbox" name="enabled" value="on" ${config?.enabled ? 'checked' : ''}>`,
+      'Turn this module on or off for this server.'
+    )
+  );
+
   for (const [key, def] of Object.entries(mod.fields || {})) {
     const current = config?.[key];
     let input = '';
     switch (def.type) {
       case 'boolean':
-        input = `<input type="checkbox" name="${key}" ${current ? 'checked' : ''}>`;
+        // Hidden input guarantees the field is submitted even when unchecked.
+        input = `<input type="hidden" name="${key}" value="off"><input type="checkbox" name="${key}" value="on" ${current ? 'checked' : ''}>`;
         break;
-      case 'text':
-        input = `<input type="text" name="${key}" value="${esc(current ?? def.default ?? '')}">`;
+      case 'channel':
+        input = `<select name="${key}"><option value="">— none —</option>${channelOptions(def, current)}</select>`;
         break;
-      case 'textarea':
-        input = `<textarea name="${key}">${esc(current ?? def.default ?? '')}</textarea>`;
+      case 'role':
+        input = `<select name="${key}"><option value="">— none —</option>${roleOptions(current)}</select>`;
+        break;
+      case 'roleList':
+      case 'channelList': {
+        const opts =
+          def.type === 'roleList'
+            ? roles.map((r) => `<option value="${esc(r.id)}" ${(current || []).includes(r.id) ? 'selected' : ''}>${esc(r.name)}</option>`).join('')
+            : channels
+                .filter((c) => !def.channelTypes || def.channelTypes.includes(c.type))
+                .map((c) => `<option value="${esc(c.id)}" ${(current || []).includes(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`)
+                .join('');
+        input = `<select name="${key}" multiple size="6">${opts}</select>`;
+        break;
+      }
+      case 'select': {
+        const opts = def.options
+          .map((o) => `<option value="${esc(o)}" ${String(current ?? '') === o ? 'selected' : ''}>${esc(o)}</option>`)
+          .join('');
+        input = `<select name="${key}"><option value="">— none —</option>${opts}</select>`;
+        break;
+      }
+      case 'list':
+        input = `<textarea name="${key}">${esc(Array.isArray(current) ? current.join(', ') : current ?? '')}</textarea>`;
+        break;
+      case 'numberList':
+        input = `<input type="text" name="${key}" value="${esc(Array.isArray(current) ? current.join(', ') : current ?? '')}">`;
         break;
       case 'number':
-        input = `<input type="number" name="${key}" value="${esc(current ?? def.default ?? '')}">`;
+        input = `<input type="number" name="${key}" value="${esc(current ?? '')}">`;
         break;
-      default:
-        input = `<input type="text" name="${key}" value="${esc(current ?? def.default ?? '')}">`;
+      case 'textarea':
+        input = `<textarea name="${key}">${esc(current ?? '')}</textarea>`;
+        break;
+      default: // text
+        input = `<input type="text" name="${key}" value="${esc(current ?? '')}">`;
     }
     parts.push(row(def.label, input, def.help));
   }

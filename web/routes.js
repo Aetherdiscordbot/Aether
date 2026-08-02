@@ -54,6 +54,18 @@ function buildRouter(getClient, opts = {}) {
     return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${ext}?size=128`;
   }
 
+  /** Merge nested config objects (dotted keys like "antiRaid.enabled"). */
+  function deepMerge(base, extra) {
+    for (const [key, value] of Object.entries(extra || {})) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && base[key] && typeof base[key] === 'object' && !Array.isArray(base[key])) {
+        deepMerge(base[key], value);
+      } else {
+        base[key] = value;
+      }
+    }
+    return base;
+  }
+
   /** Every guild the user is in, with manage/bot/premium status. */
   async function allGuilds(user) {
     const client = getClient();
@@ -211,13 +223,17 @@ function buildRouter(getClient, opts = {}) {
     if (!guild || !authService.canManageGuild(guild)) {
       return res.status(403).send(layout({ title: 'Forbidden', user, content: alert('error', 'You cannot manage that server.') }));
     }
-    const premium = premiumService.getPremiumServer(guild.id);
+    const premiumRow = premiumService.getPremiumServer(guild.id);
+    const premium = premiumRow
+      ? { ...premiumRow, active: premiumService.isPremium(guild.id) }
+      : null;
     const allOwned = await manageableGuilds(user);
     const moduleStates = modules.MODULES.map((m) => ({
       key: m.key,
       name: m.name,
       description: m.description,
-      enabled: m.hasEnabled === false ? true : settings.getSetting(guild.id, m.key)?.enabled === true,
+      premium: m.premium === true,
+      enabled: m.hasEnabled === false ? true : settings.getSetting(guild.id, m.key)?.enabled ?? m.defaultEnabled === true,
     }));
     res.send(
       pages.serverOverview({
@@ -240,12 +256,16 @@ function buildRouter(getClient, opts = {}) {
     const mod = modules.getModule(req.params.moduleKey);
     if (!mod) return res.status(404).send(layout({ title: 'Not found', user, content: alert('error', 'Unknown module.') }));
 
+    const premium = premiumService.isPremium(guild.id);
+    if (mod.premium === true && !premium) {
+      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This module requires Aether Premium on this server.') }));
+    }
+
     const client = getClient();
     const discordGuild = client?.guilds.cache.get(guild.id);
     const channels = discordGuild
       ? [...discordGuild.channels.cache.values()]
-          .filter((c) => c.isTextBased && c.isTextBased())
-          .map((c) => ({ id: c.id, name: c.name }))
+          .map((c) => ({ id: c.id, name: c.name, type: c.type }))
           .sort((a, b) => a.name.localeCompare(b.name))
       : [];
     const roles = discordGuild
@@ -255,7 +275,8 @@ function buildRouter(getClient, opts = {}) {
           .sort((a, b) => a.name.localeCompare(b.name))
       : [];
 
-    const current = settings.getSetting(guild.id, mod.key, {});
+    const stored = settings.getSetting(guild.id, mod.key, {});
+    const current = deepMerge(modules.defaultsFor(mod), stored);
     res.send(pages.moduleConfig({ user, guild, module: mod, config: current, channels, roles, errors: [] }));
   });
 
@@ -269,9 +290,13 @@ function buildRouter(getClient, opts = {}) {
     const mod = modules.getModule(req.params.moduleKey);
     if (!mod) return res.status(404).send(layout({ title: 'Not found', user, content: alert('error', 'Unknown module.') }));
 
+    if (mod.premium === true && !premiumService.isPremium(guild.id)) {
+      return res.status(403).send(layout({ title: 'Premium required', user, content: alert('error', 'This module requires Aether Premium on this server.') }));
+    }
+
     const parsed = modules.parseModuleConfig(mod, req.body);
     const existing = settings.getSetting(guild.id, mod.key, {});
-    settings.setSetting(guild.id, mod.key, { ...existing, ...parsed });
+    settings.setSetting(guild.id, mod.key, deepMerge(existing, parsed));
     logger.info(`Dashboard: ${user.username} updated ${mod.key} config for ${guild.id}`);
     res.redirect(`/dashboard/${guild.id}/modules/${mod.key}?saved=1`);
   });

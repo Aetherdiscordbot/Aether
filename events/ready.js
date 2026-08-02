@@ -55,6 +55,10 @@ ${chalk.hex('#8b5cf6').bold('  └───────────────�
     // Prune expired premium rows periodically.
     scheduler.interval(6 * 60 * 60 * 1000, pruneExpiredPremium, 'premium-expiry-prune');
 
+    // Daily database backup (VACUUM INTO snapshot, retention 7 days).
+    const backupService = require('../services/backup');
+    scheduler.schedule('0 4 * * *', () => backupService.createBackup(), 'db-daily-backup');
+
     scheduler.startAll();
   },
 };

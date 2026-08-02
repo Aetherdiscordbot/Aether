@@ -32,7 +32,7 @@ app.use(
   })
 );
 
-const getClient = () => ({ guilds: { cache: new Map([['111', 'g1'], ['222', 'g2']]) } });
+const getClient = () => ({ guilds: { cache: new Map([['111', 'g1'], ['333', 'g3']]) } });
 app.use(buildRouter(getClient));
 
 function seedSession(user) {
@@ -62,12 +62,20 @@ function request(path) {
     username: 'tester',
     avatarUrl: null,
     guilds: [
-      { id: '111', name: 'Manageable With Bot', icon: null, permissions: String(MANAGE_GUILD) },
-      { id: '222', name: 'Manageable No Bot', icon: null, permissions: '8' },
+      { id: '111', name: 'Manageable Premium', icon: null, permissions: String(MANAGE_GUILD) },
+      { id: '222', name: 'Manageable No Bot', icon: null, permissions: String(MANAGE_GUILD) },
       { id: '333', name: 'No Perms With Bot', icon: null, permissions: '0' },
       { id: '444', name: 'No Perms No Bot', icon: null, permissions: '0' },
     ],
   });
+
+  // Seed premium for guild 111 so the gold ring renders, then clean up.
+  const db = require('../database/db');
+  db.migrate();
+  const seeded = Date.now();
+  db.prepare(
+    `INSERT INTO premium_servers (guild_id, plan, status, activated_at) VALUES (?, 'premium', 'active', ?)`
+  ).run('111', new Date(seeded).toISOString());
 
   // Manual request with the session cookie (signed by cookie-signature via express-session).
   const cookie = require('cookie-signature');
@@ -86,15 +94,20 @@ function request(path) {
 
   const checks = {
     'Status 200': res.status === 200,
-    'Manage button for 111': res.body.includes('/dashboard/111'),
-    'Invite Aether for 222': res.body.includes('Invite Aether'),
-    'No manage perms for 333': res.body.includes('No manage perms'),
-    'All 4 guild names shown': ['111', '222', '333', '444'].every((id) => res.body.includes(id)),
+    'Manageable 111 clickable': res.body.includes('/dashboard/111'),
+    'Invite mini-button for 222 (bot not in)': res.body.includes('invite-mini'),
+    'Lock badge for non-manageable 333/444': (res.body.match(/server-badge lock/g) || []).length === 2,
+    'Premium ring on 111': res.body.includes('server-avatar premium'),
+    'Bot checkmark on 111 (manageable)': (res.body.match(/server-badge ok/g) || []).length === 1,
+    'Both sections rendered': res.body.includes('You can manage') && res.body.includes('Other servers'),
     'No empty-state text': !res.body.includes('No servers found'),
   };
   console.log(checks);
   const allOk = Object.values(checks).every(Boolean);
   console.log(allOk ? 'DASHBOARD CHECKS PASSED' : 'DASHBOARD CHECKS FAILED');
+
+  // Clean up the seeded premium row.
+  db.prepare('DELETE FROM premium_servers WHERE guild_id = ?').run('111');
 
   server.close();
   process.exit(allOk ? 0 : 1);
