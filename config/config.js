@@ -47,6 +47,7 @@ const config = {
     chatModel: process.env.OPENROUTER_CHAT_MODEL || 'openai/gpt-4o-mini',
     imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
     maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS || '1000', 10),
+    imageMaxTokens: parseInt(process.env.OPENROUTER_IMAGE_MAX_TOKENS || '8192', 10),
   },
 
   whop: {

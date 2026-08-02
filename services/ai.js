@@ -60,6 +60,38 @@ async function chat(prompt, { system, model } = {}) {
   }
 }
 
+/**
+ * Pull an image from a chat-completions response. OpenRouter returns
+ * generated images in `message.images[]`, whose entries may be:
+ *   - a base64 string / data URL (Gemini providers)
+ *   - { image_url: { url } } (OpenAI providers)
+ *   - { url } / { b64_json } / { data } (other variants)
+ * Older responses embedded them in content parts — kept as a fallback.
+ */
+function extractImage(data) {
+  const message = data?.choices?.[0]?.message;
+
+  for (const part of Array.isArray(message?.content) ? message.content : [message?.content]) {
+    const url = typeof part === 'string' ? part : part?.image_url?.url;
+    if (typeof url === 'string' && url.startsWith('data:image/')) {
+      return { buffer: Buffer.from(url.split(',')[1], 'base64') };
+    }
+  }
+
+  for (const img of message?.images || []) {
+    const raw =
+      typeof img === 'string'
+        ? img
+        : img?.image_url?.url ?? img?.url ?? img?.b64_json ?? img?.data;
+    if (typeof raw !== 'string' || !raw) continue;
+    const url = raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`;
+    if (url.startsWith('data:image/')) {
+      return { buffer: Buffer.from(url.split(',')[1], 'base64') };
+    }
+  }
+  return null;
+}
+
 /** Image generation → { buffer } (data URL from the model) or error. */
 async function image(prompt) {
   if (!isConfigured()) throw new Error('AI is not configured (missing OPENROUTER_API_KEY).');
@@ -71,21 +103,16 @@ async function image(prompt) {
         model,
         modalities: ['image', 'text'],
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: config.ai.maxTokens,
+        max_tokens: config.ai.imageMaxTokens,
       },
       { headers: headers(), timeout: 180_000 }
     );
-    const content = data?.choices?.[0]?.message?.content;
-    const parts = Array.isArray(content) ? content : [content];
-    for (const part of parts) {
-      if (typeof part === 'string' && part.startsWith('data:image/')) {
-        return { buffer: Buffer.from(part.split(',')[1], 'base64') };
-      }
-      if (part && typeof part === 'object' && typeof part.image_url?.url === 'string' && part.image_url.url.startsWith('data:image/')) {
-        return { buffer: Buffer.from(part.image_url.url.split(',')[1], 'base64') };
-      }
+    const result = extractImage(data);
+    if (!result) {
+      logger.debug(`AI image: unexpected response from ${model}: ${JSON.stringify(data?.choices?.[0]?.message).slice(0, 500)}`);
+      throw new Error('The image model did not return an image.');
     }
-    throw new Error('The image model did not return an image.');
+    return result;
   };
 
   const models = [config.ai.imageModel];
