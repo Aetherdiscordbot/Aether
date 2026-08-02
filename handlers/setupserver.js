@@ -14,6 +14,7 @@ const { baseEmbed, errorEmbed, Colors } = require('../utils/discord');
 const settings = require('../services/settings');
 const permissions = require('../services/permissions');
 const logger = require('../services/logger');
+const logService = require('../services/logService');
 
 const ROLES = [
   { name: 'Staff Team', color: '#8b5cf6', hoist: true },
@@ -251,24 +252,47 @@ module.exports = {
       const supportCat = findCategory(guild, 'BOT & SUPPORT');
       const staffCat = findCategory(guild, 'STAFF TEAM');
       const auditLog = staffCat ? findChannel(guild, '【📋】audit-log') || findChannel(guild, 'audit-log') : null;
+      const helpChannel = supportCat ? findChannel(guild, '【🎫】help-and-support') || findChannel(guild, 'help-and-support') : null;
+      const archiveChannel = findChannel(guild, '【🗃️】resolved-archive') || findChannel(guild, 'resolved-archive');
 
+      // Tickets: panel in BOT & SUPPORT, staff roles, logs + transcripts.
       if (supportCat) {
         const existing = settings.getSetting(guild.id, 'ticket', {});
         settings.setSetting(guild.id, 'ticket', {
           ...existing,
+          enabled: true,
           categoryId: supportCat.id,
           staffRoles: [staffRole?.id, supportRole?.id].filter(Boolean),
+          panelChannelId: helpChannel?.id || null,
+          logChannelId: auditLog?.id || null,
+          transcriptChannelId: archiveChannel?.id || null,
+          categories: [
+            { name: 'General', emoji: '💬' },
+            { name: 'Billing', emoji: '💳' },
+            { name: 'Report', emoji: '🚩' },
+          ],
         });
-        summary.wired.push('Tickets -> BOT & SUPPORT + staff roles');
+        summary.wired.push('Tickets -> BOT & SUPPORT (panel, staff roles, log, transcripts, categories)');
       }
+
+      // Logging: every event type -> #audit-log.
       if (auditLog) {
         const existing = settings.getSetting(guild.id, 'logging', {});
+        const channels = {};
+        for (const e of logService.EVENT_KEYS) channels[e.key] = auditLog.id;
         settings.setSetting(guild.id, 'logging', {
           ...existing,
           enabled: true,
-          channels: { ...(existing.channels || {}), moderation: auditLog.id, ticket: supportCat?.id || null },
+          channels: { ...channels, ...(existing.channels || {}) },
         });
-        summary.wired.push('Logging -> #audit-log');
+        summary.wired.push('Logging -> #audit-log (all event types)');
+      }
+
+      // Automod: on with the default rules (caps, mention and emoji limits).
+      {
+        const existing = settings.getSetting(guild.id, 'automod', {});
+        settings.setSetting(guild.id, 'automod', { ...existing, enabled: true });
+        summary.wired.push('Automod -> enabled (caps, mentions, emoji limits)');
       }
 
       logger.info(`?setupserver ran in ${guild.id}: +${summary.roles.length} roles, +${summary.categories.length} cats, +${summary.channels.length} channels, +${summary.renamed.length} renamed`);
