@@ -132,7 +132,7 @@ function textPerms(guild, catName) {
 /** Explicit perms for a voice channel: everyone can join and talk. */
 function voicePerms(guild) {
   const overrides = [
-    { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.UseVoiceActivity] },
+    { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak] },
   ];
   if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.Connect] });
   return overrides;
@@ -164,7 +164,7 @@ module.exports = {
           summary.skipped.push(`Role ${def.name} (already exists)`);
           createdRoles.set(def.name, existing);
         } else {
-          const role = await guild.roles.create({ name: def.name, color: def.color, hoist: def.hoist, reason: 'Aether ?setupserver' });
+          const role = await guild.roles.create({ name: def.name, colors: [def.color], hoist: def.hoist, reason: 'Aether ?setupserver' });
           summary.roles.push(`@${def.name}`);
           createdRoles.set(def.name, role);
         }
