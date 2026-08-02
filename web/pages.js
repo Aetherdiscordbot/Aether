@@ -350,6 +350,7 @@ function ownerPage({ user, stats, notice }) {
     <h3 style="margin-top:30px">Grant premium</h3>
     <div class="card" style="max-width:560px">
       <form method="post" action="/owner/premium" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <input type="hidden" name="action" value="grant">
         <div class="field" style="flex:1;min-width:180px;margin:0">
           <label>Server ID</label>
           <input type="text" name="guildId" placeholder="123456789012345678" required>
