@@ -45,7 +45,7 @@ const config = {
   ai: {
     openRouterKey: process.env.OPENROUTER_API_KEY || '',
     chatModel: process.env.OPENROUTER_CHAT_MODEL || 'openai/gpt-4o-mini',
-    imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.0-flash-preview-image-generation',
+    imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
     maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS || '1000', 10),
   },
 
