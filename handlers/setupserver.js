@@ -30,9 +30,9 @@ const CATEGORIES = [
     channels: [
       { name: 'rules', emoji: '📜' },
       { name: 'welcome', emoji: '👋' },
-      { name: 'updates', emoji: '📣' },
-      { name: 'announcements', emoji: '📢' },
-      { name: 'changelog', emoji: '📝' },
+      { name: 'updates', emoji: '📣', readonly: true },
+      { name: 'announcements', emoji: '📢', readonly: true },
+      { name: 'changelog', emoji: '📝', readonly: true },
     ],
   },
   {
@@ -111,18 +111,25 @@ const findCategory = (guild, name) =>
 
 /** Overrides that hide a category (and its children) behind roles. */
 function gateOverrides(guild, catName) {
-  const overrides = [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }];
+  const overrides = [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }];
   for (const roleName of GATED[catName] || []) {
     const role = findRole(guild, roleName);
-    if (role) overrides.push({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+    if (role) overrides.push({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages] });
   }
   if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages] });
   return overrides;
 }
 
-/** Explicit perms for a text channel: public ones open, gated ones inherit the gate. */
-function textPerms(guild, catName) {
+/** Explicit perms for a text channel: public ones open, gated ones inherit the gate, readonly ones are view-only. */
+function textPerms(guild, catName, def = {}) {
   if (GATED[catName]) return gateOverrides(guild, catName);
+  if (def.readonly) {
+    const overrides = [
+      { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
+    ];
+    if (guild.members.me) overrides.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages] });
+    return overrides;
+  }
   const overrides = [
     { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages] },
   ];
@@ -139,6 +146,20 @@ function voicePerms(guild) {
   return overrides;
 }
 
+/** Read back the overrides just set and flag anything that did not stick. */
+function verifyOverrides(channel, guild, catName, def, summary) {
+  const everyone = channel.permissionOverwrites.cache.get(guild.roles.everyone.id);
+  if (!everyone) return;
+  const denies = (ov) => (ov.deny?.has ? ov.deny.has(PermissionFlagsBits.ViewChannel) : (ov.deny || []).includes(PermissionFlagsBits.ViewChannel));
+  const allows = (ov, flag) => (ov.allow?.has ? ov.allow.has(flag) : (ov.allow || []).includes(flag));
+  if (GATED[catName] && !denies(everyone)) {
+    summary.permWarnings.push(`${channel.name}: @everyone can still see it`);
+  }
+  if (def.readonly && allows(everyone, PermissionFlagsBits.SendMessages)) {
+    summary.permWarnings.push(`${channel.name}: @everyone can still type`);
+  }
+}
+
 module.exports = {
   name: 'setupserver',
   ownerOnly: true,
@@ -153,7 +174,7 @@ module.exports = {
     }
 
     const guild = message.guild;
-    const summary = { roles: [], categories: [], channels: [], renamed: [], gates: [], wired: [], skipped: [], permOpen: 0, permLocked: 0 };
+    const summary = { roles: [], categories: [], channels: [], renamed: [], gates: [], wired: [], skipped: [], permOpen: 0, permLocked: 0, permWarnings: [] };
     await message.channel.sendTyping().catch(() => {});
 
     try {
@@ -212,9 +233,10 @@ module.exports = {
             });
             summary.channels.push(full);
           }
-          await channel.permissionOverwrites.set(GATED[cat.name] ? gateOverrides(guild, cat.name) : textPerms(guild, cat.name), 'Aether ?setupserver');
+          await channel.permissionOverwrites.set(GATED[cat.name] ? gateOverrides(guild, cat.name) : textPerms(guild, cat.name, def), 'Aether ?setupserver');
           if (GATED[cat.name]) summary.permLocked++;
           else summary.permOpen++;
+          verifyOverrides(channel, guild, cat.name, def, summary);
         }
       }
 
@@ -324,6 +346,7 @@ module.exports = {
         field('Renamed channels', summary.renamed),
         field('Permission gates', summary.gates.map((g) => `${g} locked`)),
         field('Channel permissions', [`${summary.permOpen} open · ${summary.permLocked} role-locked`]),
+        field('Permission warnings', summary.permWarnings),
         field('Wired into modules', summary.wired),
         field('Skipped', summary.skipped),
       ].filter(Boolean),
