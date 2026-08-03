@@ -3,7 +3,7 @@
  */
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config/config');
-const logger = require('./logger');
+const logger = require('../services/logger');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
