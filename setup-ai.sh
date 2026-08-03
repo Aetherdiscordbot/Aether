@@ -10,14 +10,13 @@ echo "==> Installing Ollama..."
 if command -v ollama >/dev/null 2>&1; then
   echo "    ollama already installed."
 else
-  command -v zstd >/dev/null 2>&1 || (apt-get update >/dev/null 2>&1 && apt-get install -y zstd >/dev/null 2>&1)
   arch=$(uname -m)
   case "$arch" in
     x86_64|amd64) oat="ollama-linux-amd64" ;;
     aarch64|arm64) oat="ollama-linux-arm64" ;;
     *) echo "Unsupported architecture: $arch" ; exit 1 ;;
   esac
-  curl -fsSL "https://ollama.com/download/${oat}.tar.zst" | zstd -d | tar -xf - -C /usr/local
+  curl -fsSL "https://ollama.com/download/${oat}.tgz?version=0.13.5" | tar -xzf - -C /usr/local
   echo "    Installed to /usr/local/bin/ollama"
 fi
 
