@@ -88,13 +88,12 @@ async function registerCommands() {
     return;
   }
 
-  const target = config.mainGuildId
-    ? Routes.applicationGuildCommands(config.clientId, config.mainGuildId)
-    : Routes.applicationCommands(config.clientId);
+  // Register globally so commands work in all servers
+  const target = Routes.applicationCommands(config.clientId);
 
   try {
     const result = await rest.put(target, { body: data });
-    logger.info(`Registered ${result.length} slash commands ${config.mainGuildId ? `in guild ${config.mainGuildId}` : 'globally'}`);
+    logger.info(`Registered ${result.length} slash commands globally`);
   } catch (e) {
     logger.error(`Failed to register commands: ${e.message}`);
   }
@@ -477,7 +476,7 @@ async function startBot() {
   //   await tickets.handleTicketMessage(message);
   // });
 
-  client.once('ready', () => {
+  client.once('clientReady', () => {
     logger.info(`Logged in as ${client.user.tag} (${client.user.id})`);
   });
 
