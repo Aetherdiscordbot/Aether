@@ -1,7 +1,9 @@
 /**
- * OpenRouter AI service — chat + image generation with usage tracking,
+ * AI service — local in-process inference via node-llama-cpp,
+ * with remote (OpenRouter-compatible) fallback, usage tracking,
  * conversation memory, and rate limits.
  */
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config/config');
 const logger = require('./logger');
@@ -12,6 +14,15 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
+let getLlama;
+let LlamaChatSession;
+let resolveModelFile;
+try {
+  ({ getLlama, LlamaChatSession, resolveModelFile } = require('node-llama-cpp'));
+} catch (e) {
+  logger.warn(`node-llama-cpp unavailable (${e.message}) — local AI disabled`);
+}
+
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
 const BASE_URL = config.aiBaseUrl || OPENROUTER_URL;
 const CHAT_MODEL = config.aiChatModel || 'openai/gpt-4o-mini';
@@ -19,6 +30,12 @@ const IMAGE_MODEL = config.aiImageModel || 'google/gemini-2.5-flash-image';
 const IMAGE_BASE_URL = config.aiImageBaseUrl || OPENROUTER_URL;
 const MAX_HISTORY = 10; // messages per conversation
 const RATE_LIMIT = { chat: 30, image: 10 }; // per minute per user
+
+const MODEL_URL = config.aiModelUrl;
+const MODEL_DIR = config.aiModelDir;
+
+let model = null;
+let isLocalReady = false;
 
 const rateLimitMap = new Map(); // "userId:chat" -> [timestamps]
 
@@ -95,10 +112,45 @@ async function openRouterRequest(path, body, baseUrl = BASE_URL) {
   return res.json();
 }
 
+/** Local in-process inference via node-llama-cpp. */
+async function localChat(messages, opts = {}) {
+  const systemPrompt = messages.find(m => m.role === 'system')?.content;
+  const turns = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+  const promptMsg = turns[turns.length - 1] || { role: 'user', content: '' };
+  const prior = turns.slice(0, -1);
+  const history = prior.map(m => m.role === 'assistant'
+    ? { type: 'model', response: [m.content] }
+    : { type: 'user', text: m.content });
+
+  const context = await model.createContext();
+  const sequence = context.getSequence();
+  const session = new LlamaChatSession({
+    contextSequence: sequence,
+    ...(systemPrompt ? { systemPrompt } : {}),
+  });
+  try {
+    if (history.length) session.setChatHistory(history);
+    const response = await session.prompt(promptMsg.content, {
+      maxTokens: opts.maxTokens || 1000,
+      temperature: opts.temperature ?? 0.7,
+    });
+    const usage =
+      model.tokenize(promptMsg.content).length +
+      model.tokenize(response).length;
+    return { content: response, usage };
+  } finally {
+    session.dispose();
+    context.dispose();
+  }
+}
+
 async function chat(messages, opts = {}) {
-  const model = opts.model || CHAT_MODEL;
+  if (config.aiLocal) {
+    if (!isLocalReady || !model) throw new Error('Local AI is not ready yet');
+    return localChat(messages, opts);
+  }
   const data = await openRouterRequest('/chat/completions', {
-    model,
+    model: opts.model || CHAT_MODEL,
     messages,
     max_tokens: opts.maxTokens || 1000,
     temperature: opts.temperature ?? 0.7,
@@ -108,6 +160,9 @@ async function chat(messages, opts = {}) {
 }
 
 async function image(prompt, opts = {}) {
+  if (config.aiLocal) {
+    throw new Error('Image generation is not supported by the local AI model');
+  }
   const model = opts.model || IMAGE_MODEL;
   const data = await openRouterRequest('/images/generations', {
     model,
@@ -157,74 +212,21 @@ async function getUsage(guildId, days = 30) {
   return data || [];
 }
 
-const { execSync, spawn } = require('child_process');
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-/** Try to start the local Ollama daemon if it isn't running. */
-function startOllama() {
-  // systemd service
-  try { execSync('systemctl start ollama', { stdio: 'ignore' }); return true; } catch {}
-  // classic init
-  try { execSync('service ollama start', { stdio: 'ignore' }); return true; } catch {}
-  // fallback: run ollama serve detached
-  try {
-    const child = spawn('ollama', ['serve'], { stdio: 'ignore', detached: true });
-    child.on('error', () => {});
-    child.unref();
-    return true;
-  } catch {}
-  return false;
-}
-
-/** Wait for Ollama to become reachable, starting it if needed. */
-async function waitForOllama(root, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let started = false;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${root}/api/version`);
-      if (res.ok) return true;
-    } catch {}
-    if (!started) {
-      logger.warn('Ollama not reachable, starting it...');
-      started = startOllama();
-    }
-    await sleep(2000);
-  }
-  return false;
-}
-
-/** Ensure local Ollama is running and the chat model is downloaded. */
+/** Load (and download if missing) the local model before the bot goes online. */
 async function ensureLocalModel() {
   if (!config.aiLocal) return;
-  const model = CHAT_MODEL;
-  const ollamaRoot = BASE_URL.replace(/\/v1$/, '');
+  if (isLocalReady || !getLlama || !resolveModelFile) return;
   try {
-    if (!(await waitForOllama(ollamaRoot, 120000))) {
-      logger.warn(`Local AI (${ollamaRoot}) did not come up in time`);
-      return;
-    }
-    const show = await fetch(`${ollamaRoot}/api/show`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: model }),
-    });
-    if (show.ok) {
-      logger.info(`Local AI model ${model} ready`);
-      return;
-    }
-    logger.info(`Downloading local AI model ${model} (may take a few minutes)...`);
-    const pull = await fetch(`${ollamaRoot}/api/pull`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: model, stream: false }),
-      signal: AbortSignal.timeout(20 * 60 * 1000),
-    });
-    if (!pull.ok) logger.warn(`Local AI model pull failed: ${pull.status} ${await pull.text()}`);
-    else logger.info(`Local AI model ${model} downloaded`);
+    logger.info('Local AI: resolving model (downloads on first run, may take a while)...');
+    const modelPath = await resolveModelFile(MODEL_URL, MODEL_DIR);
+    const llama = await getLlama();
+    model = await llama.loadModel({ modelPath });
+    isLocalReady = true;
+    logger.info(`Local AI ready: ${modelPath}`);
   } catch (e) {
-    logger.warn(`Could not reach local AI (${ollamaRoot}): ${e.message}`);
+    logger.warn(`Local AI setup failed: ${e.message}`);
+    model = null;
+    isLocalReady = false;
   }
 }
 

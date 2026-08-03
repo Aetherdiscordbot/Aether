@@ -1,6 +1,7 @@
 /**
  * Central configuration — all from env, no defaults for secrets.
  */
+const path = require('path');
 const REQUIRED = ['DISCORD_TOKEN', 'CLIENT_ID', 'OWNER_IDS', 'MAIN_GUILD_ID'];
 
 const config = {
@@ -31,6 +32,8 @@ const config = {
   aiImageBaseUrl: process.env.AI_IMAGE_BASE_URL || 'http://localhost:11434/v1',
   aiImageModel: process.env.AI_IMAGE_MODEL || 'gemma3:4b',
   aiLocal: process.env.AI_LOCAL !== 'false',
+  aiModelUrl: process.env.AI_MODEL_URL || 'https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf',
+  aiModelDir: process.env.AI_MODEL_DIR || path.join(__dirname, '..', 'models'),
 };
 
 function getMissingEnv() {
