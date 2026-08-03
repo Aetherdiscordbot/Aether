@@ -51,6 +51,6 @@ module.exports = {
     BEGIN
       UPDATE custom_commands SET uses = uses + 1 WHERE guild_id = $1 AND name = $2;
     END;
-    $$ LANGUAGE sql;
+    $$;
   `
 };
