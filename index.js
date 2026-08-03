@@ -2,6 +2,7 @@
  * Whop webhook receiver + Discord bot entry.
  * No dashboard, no website — just the bot + Whop webhook.
  */
+require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const config = require('./config/config');
