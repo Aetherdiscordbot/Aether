@@ -29,6 +29,9 @@ async function whopRequest(path, opts = {}) {
 
 /** Check if a guild has active premium. */
 async function isPremium(guildId) {
+  // Main server is always premium (owner)
+  if (guildId === config.mainGuildId) return true;
+
   const { data } = await supabase
     .from('premium_servers')
     .select('status, expires_at')

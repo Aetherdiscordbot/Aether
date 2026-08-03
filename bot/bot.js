@@ -99,6 +99,22 @@ async function registerCommands() {
   }
 }
 
+/** Remove any guild-scoped commands so global commands don't show twice. */
+async function cleanupGuildCommands(client) {
+  const rest = new REST({ version: '10' }).setToken(config.token);
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const existing = await rest.get(Routes.applicationGuildCommands(config.clientId, guild.id));
+      if (existing.length) {
+        await rest.put(Routes.applicationGuildCommands(config.clientId, guild.id), { body: [] });
+        logger.info(`Cleared ${existing.length} guild-scoped commands in ${guild.id}`);
+      }
+    } catch (e) {
+      logger.warn(`Failed to clear guild commands in ${guild.id}: ${e.message}`);
+    }
+  }
+}
+
 const prefixCommands = new Map();
 
 function loadPrefixCommands() {
@@ -478,6 +494,7 @@ async function startBot() {
 
   client.once('clientReady', () => {
     logger.info(`Logged in as ${client.user.tag} (${client.user.id})`);
+    cleanupGuildCommands(client);
   });
 
   await client.login(config.token);
