@@ -3,7 +3,6 @@
  * with remote (OpenRouter-compatible) fallback, usage tracking,
  * conversation memory, and rate limits.
  */
-const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config/config');
 const logger = require('./logger');
@@ -17,10 +16,22 @@ const supabase = createClient(
 let getLlama;
 let LlamaChatSession;
 let resolveModelFile;
-try {
-  ({ getLlama, LlamaChatSession, resolveModelFile } = require('node-llama-cpp'));
-} catch (e) {
-  logger.warn(`node-llama-cpp unavailable (${e.message}) — local AI disabled`);
+let nlcLoaded = false;
+
+/** node-llama-cpp is ESM-only — load it dynamically from CommonJS. */
+async function loadNlc() {
+  if (nlcLoaded) return true;
+  try {
+    const nlc = await import('node-llama-cpp');
+    getLlama = nlc.getLlama;
+    LlamaChatSession = nlc.LlamaChatSession;
+    resolveModelFile = nlc.resolveModelFile;
+    nlcLoaded = true;
+    return true;
+  } catch (e) {
+    logger.warn(`node-llama-cpp unavailable (${e.message}) — local AI disabled`);
+    return false;
+  }
 }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
@@ -114,6 +125,7 @@ async function openRouterRequest(path, body, baseUrl = BASE_URL) {
 
 /** Local in-process inference via node-llama-cpp. */
 async function localChat(messages, opts = {}) {
+  await loadNlc();
   const systemPrompt = messages.find(m => m.role === 'system')?.content;
   const turns = messages.filter(m => m.role === 'user' || m.role === 'assistant');
   const promptMsg = turns[turns.length - 1] || { role: 'user', content: '' };
@@ -215,7 +227,8 @@ async function getUsage(guildId, days = 30) {
 /** Load (and download if missing) the local model before the bot goes online. */
 async function ensureLocalModel() {
   if (!config.aiLocal) return;
-  if (isLocalReady || !getLlama || !resolveModelFile) return;
+  if (isLocalReady) return;
+  if (!(await loadNlc())) return;
   try {
     logger.info('Local AI: resolving model (downloads on first run, may take a while)...');
     const modelPath = await resolveModelFile(MODEL_URL, MODEL_DIR);
