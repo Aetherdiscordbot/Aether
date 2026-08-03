@@ -26,6 +26,11 @@ const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   skipCommandSync: process.env.SKIP_COMMAND_SYNC === 'true',
   openRouterKey: process.env.OPENROUTER_API_KEY,
+  aiBaseUrl: process.env.AI_BASE_URL || 'http://localhost:11434/v1',
+  aiChatModel: process.env.AI_CHAT_MODEL || 'gemma3:4b',
+  aiImageBaseUrl: process.env.AI_IMAGE_BASE_URL || 'http://localhost:11434/v1',
+  aiImageModel: process.env.AI_IMAGE_MODEL || 'gemma3:4b',
+  aiLocal: process.env.AI_LOCAL !== 'false',
 };
 
 function getMissingEnv() {

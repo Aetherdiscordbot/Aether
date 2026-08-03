@@ -13,6 +13,10 @@ const supabase = createClient(
 );
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1';
+const BASE_URL = config.aiBaseUrl || OPENROUTER_URL;
+const CHAT_MODEL = config.aiChatModel || 'openai/gpt-4o-mini';
+const IMAGE_MODEL = config.aiImageModel || 'google/gemini-2.5-flash-image';
+const IMAGE_BASE_URL = config.aiImageBaseUrl || OPENROUTER_URL;
 const MAX_HISTORY = 10; // messages per conversation
 const RATE_LIMIT = { chat: 30, image: 10 }; // per minute per user
 
@@ -76,30 +80,27 @@ async function saveHistory(guildId, userId, messages) {
   });
 }
 
-async function openRouterRequest(path, body) {
-  const res = await fetch(`${OPENROUTER_URL}${path}`, {
+async function openRouterRequest(path, body, baseUrl = BASE_URL) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (config.openRouterKey) headers['Authorization'] = `Bearer ${config.openRouterKey}`;
+  const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.openRouterKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aether.ocrp.cc',
-      'X-Title': 'Aether Bot',
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${text}`);
+    throw new Error(`${baseUrl} ${res.status}: ${text}`);
   }
   return res.json();
 }
 
 async function chat(messages, opts = {}) {
-  const model = opts.model || config.ai?.chatModel || 'openai/gpt-4o-mini';
+  const model = opts.model || CHAT_MODEL;
   const data = await openRouterRequest('/chat/completions', {
     model,
     messages,
-    max_tokens: opts.maxTokens || config.ai?.maxTokens || 1000,
+    max_tokens: opts.maxTokens || 1000,
     temperature: opts.temperature ?? 0.7,
   });
   const usage = data.usage?.total_tokens || 0;
@@ -107,13 +108,13 @@ async function chat(messages, opts = {}) {
 }
 
 async function image(prompt, opts = {}) {
-  const model = opts.model || config.ai?.imageModel || 'google/gemini-2.5-flash-image';
+  const model = opts.model || IMAGE_MODEL;
   const data = await openRouterRequest('/images/generations', {
     model,
     prompt,
     n: opts.n || 1,
     size: opts.size || '1024x1024',
-  });
+  }, IMAGE_BASE_URL);
   return data.data?.[0]?.url ?? '';
 }
 
@@ -156,6 +157,33 @@ async function getUsage(guildId, days = 30) {
   return data || [];
 }
 
+/** Auto-download the chat model on a local Ollama server. */
+async function ensureLocalModel() {
+  if (!config.aiLocal) return;
+  const model = CHAT_MODEL;
+  const ollamaRoot = BASE_URL.replace(/\/v1$/, '');
+  try {
+    const res = await fetch(`${ollamaRoot}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: model }),
+    });
+    if (res.ok) {
+      logger.info(`Local AI model ${model} already available`);
+      return;
+    }
+    logger.info(`Downloading local AI model ${model}...`);
+    await fetch(`${ollamaRoot}/api/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: model, stream: false }),
+    });
+    logger.info(`Local AI model ${model} downloaded`);
+  } catch (e) {
+    logger.warn(`Could not reach local AI (${ollamaRoot}): ${e.message}`);
+  }
+}
+
 module.exports = {
   chat,
   image,
@@ -164,4 +192,5 @@ module.exports = {
   clearHistory,
   getUsage,
   trackUsage,
+  ensureLocalModel,
 };

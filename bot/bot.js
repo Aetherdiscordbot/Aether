@@ -495,6 +495,7 @@ async function startBot() {
   client.once('clientReady', () => {
     logger.info(`Logged in as ${client.user.tag} (${client.user.id})`);
     cleanupGuildCommands(client);
+    ai.ensureLocalModel();
   });
 
   await client.login(config.token);
