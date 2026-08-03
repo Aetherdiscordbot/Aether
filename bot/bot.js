@@ -495,8 +495,10 @@ async function startBot() {
   client.once('clientReady', () => {
     logger.info(`Logged in as ${client.user.tag} (${client.user.id})`);
     cleanupGuildCommands(client);
-    ai.ensureLocalModel();
   });
+
+  // Start the local AI (Ollama) and download the model BEFORE the bot goes online
+  await ai.ensureLocalModel();
 
   await client.login(config.token);
 }

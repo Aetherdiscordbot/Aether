@@ -157,28 +157,71 @@ async function getUsage(guildId, days = 30) {
   return data || [];
 }
 
-/** Auto-download the chat model on a local Ollama server. */
+const { execSync, spawn } = require('child_process');
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** Try to start the local Ollama daemon if it isn't running. */
+function startOllama() {
+  // systemd service
+  try { execSync('systemctl start ollama', { stdio: 'ignore' }); return true; } catch {}
+  // classic init
+  try { execSync('service ollama start', { stdio: 'ignore' }); return true; } catch {}
+  // fallback: run ollama serve detached
+  try {
+    const child = spawn('ollama', ['serve'], { stdio: 'ignore', detached: true });
+    child.unref();
+    return true;
+  } catch {}
+  return false;
+}
+
+/** Wait for Ollama to become reachable, starting it if needed. */
+async function waitForOllama(root, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let started = false;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${root}/api/version`);
+      if (res.ok) return true;
+    } catch {}
+    if (!started) {
+      logger.warn('Ollama not reachable, starting it...');
+      started = startOllama();
+    }
+    await sleep(2000);
+  }
+  return false;
+}
+
+/** Ensure local Ollama is running and the chat model is downloaded. */
 async function ensureLocalModel() {
   if (!config.aiLocal) return;
   const model = CHAT_MODEL;
   const ollamaRoot = BASE_URL.replace(/\/v1$/, '');
   try {
-    const res = await fetch(`${ollamaRoot}/api/show`, {
+    if (!(await waitForOllama(ollamaRoot, 120000))) {
+      logger.warn(`Local AI (${ollamaRoot}) did not come up in time`);
+      return;
+    }
+    const show = await fetch(`${ollamaRoot}/api/show`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: model }),
     });
-    if (res.ok) {
-      logger.info(`Local AI model ${model} already available`);
+    if (show.ok) {
+      logger.info(`Local AI model ${model} ready`);
       return;
     }
-    logger.info(`Downloading local AI model ${model}...`);
-    await fetch(`${ollamaRoot}/api/pull`, {
+    logger.info(`Downloading local AI model ${model} (may take a few minutes)...`);
+    const pull = await fetch(`${ollamaRoot}/api/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: model, stream: false }),
+      signal: AbortSignal.timeout(20 * 60 * 1000),
     });
-    logger.info(`Local AI model ${model} downloaded`);
+    if (!pull.ok) logger.warn(`Local AI model pull failed: ${pull.status} ${await pull.text()}`);
+    else logger.info(`Local AI model ${model} downloaded`);
   } catch (e) {
     logger.warn(`Could not reach local AI (${ollamaRoot}): ${e.message}`);
   }
