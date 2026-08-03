@@ -18,14 +18,7 @@ async function getBalance(guildId, userId) {
 
 async function addMoney(guildId, userId, amount, toBank = false) {
   const col = toBank ? 'bank' : 'balance';
-  await supabase.from('economy').upsert({
-    guild_id: guildId,
-    user_id: userId,
-    [col]: amount,
-    balance: toBank ? 0 : amount,
-    bank: toBank ? amount : 0,
-  }, { onConflict: 'guild_id,user_id', ignoreDuplicates: false });
-  // Use RPC for atomic increment
+  // RPC does INSERT ... ON CONFLICT DO UPDATE increment (atomic, no overwrite)
   await supabase.rpc('increment_economy', { p_guild_id: guildId, p_user_id: userId, p_col: col, p_val: amount });
 }
 

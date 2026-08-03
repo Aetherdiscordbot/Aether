@@ -9,9 +9,9 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-async function create(guildId, channelId, prize, winners, endsAt, hostId, requirements = {}) {
+async function create(guildId, channelId, prize, winners, endsAt, hostId, requirements = {}, messageId) {
   const { data } = await supabase.from('giveaways').insert({
-    guild_id: guildId, channel_id: channelId, prize, winners, ends_at: endsAt, host_id: hostId, requirements
+    guild_id: guildId, channel_id: channelId, message_id: messageId, prize, winners, ends_at: endsAt, host_id: hostId, requirements
   }).select().single();
   return data;
 }
