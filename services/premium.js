@@ -43,6 +43,54 @@ async function isPremium(guildId) {
   return true;
 }
 
+/** Grant premium role in main server to a user. */
+async function grantMainServerRole(userId) {
+  try {
+    const client = require('../bot/bot').client;
+    const mainGuildId = config.mainGuildId;
+    if (!mainGuildId) return;
+    
+    const mainGuild = client.guilds.cache.get(mainGuildId);
+    if (!mainGuild) return;
+    
+    const premiumRoleId = '1533210783926849548';
+    const premiumRole = mainGuild.roles.cache.get(premiumRoleId);
+    if (!premiumRole) return;
+    
+    const member = await mainGuild.members.fetch(userId).catch(() => null);
+    if (member && !member.roles.cache.has(premiumRoleId)) {
+      await member.roles.add(premiumRoleId, 'Aether Premium subscription');
+      logger.info(`Granted Aether Premium role to ${userId} in main server`);
+    }
+  } catch (e) {
+    logger.error(`Failed to grant main server premium role: ${e.message}`);
+  }
+}
+
+/** Remove premium role in main server from a user. */
+async function removeMainServerRole(userId) {
+  try {
+    const client = require('../bot/bot').client;
+    const mainGuildId = config.mainGuildId;
+    if (!mainGuildId) return;
+    
+    const mainGuild = client.guilds.cache.get(mainGuildId);
+    if (!mainGuild) return;
+    
+    const premiumRoleId = '1533210783926849548';
+    const premiumRole = mainGuild.roles.cache.get(premiumRoleId);
+    if (!premiumRole) return;
+    
+    const member = await mainGuild.members.fetch(userId).catch(() => null);
+    if (member && member.roles.cache.has(premiumRoleId)) {
+      await member.roles.remove(premiumRoleId, 'Aether Premium subscription expired/cancelled');
+      logger.info(`Removed Aether Premium role from ${userId} in main server`);
+    }
+  } catch (e) {
+    logger.error(`Failed to remove main server premium role: ${e.message}`);
+  }
+}
+
 /** Grant premium to a guild (called by Whop webhook). */
 async function grantPremium(guildId, plan = 'premium', expiresAt = null) {
   await supabase.from('premium_servers').upsert({
@@ -73,6 +121,7 @@ async function handleWebhookEvent(event) {
     const expiresAt = membership.ends_at ? new Date(membership.ends_at).toISOString() : null;
 
     await grantPremium(guildId, plan, expiresAt);
+    await grantMainServerRole(userId);
     await supabase.from('premium_memberships').upsert({
       user_id: userId,
       guild_id: guildId,
@@ -84,8 +133,10 @@ async function handleWebhookEvent(event) {
   } else if (event.type === 'membership.cancelled' || event.type === 'membership.expired') {
     const membership = event.data;
     const guildId = membership.metadata?.discord_guild_id || membership.custom_fields?.discord_server_id;
+    const userId = membership.user_id;
     if (guildId) await revokePremium(guildId);
+    if (userId) await removeMainServerRole(userId);
   }
 }
 
-module.exports = { isPremium, grantPremium, revokePremium, handleWebhookEvent };
+module.exports = { isPremium, grantPremium, revokePremium, handleWebhookEvent, grantMainServerRole, removeMainServerRole };
