@@ -1,7 +1,7 @@
 /**
  * /ai — OpenRouter chat + image generation with history, rate limits, usage.
  */
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const ai = require('../../services/ai');
 
 module.exports = {
@@ -73,17 +73,29 @@ module.exports = {
           system,
           { model }
         );
-        await interaction.editReply({ content: reply.slice(0, 2000) });
+        const embed = new EmbedBuilder()
+          .setColor(0x8b5cf6)
+          .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+          .setDescription(reply.slice(0, 4000))
+          .setTimestamp();
+        await interaction.editReply({ embeds: [embed] });
       } else if (sub === 'image') {
         const prompt = interaction.options.getString('prompt');
         const model = interaction.options.getString('model');
         const size = interaction.options.getString('size');
 
         const url = await ai.generateImage(interaction.guildId, interaction.user.id, prompt, { model, size });
-        await interaction.editReply({ content: url });
+        const embed = new EmbedBuilder()
+          .setColor(0x8b5cf6)
+          .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+          .setTitle('🖼️ Generated Image')
+          .setImage(url)
+          .setFooter({ text: prompt.slice(0, 100) })
+          .setTimestamp();
+        await interaction.editReply({ embeds: [embed] });
       } else if (sub === 'clear') {
         await ai.clearHistory(interaction.guildId, interaction.user.id);
-        await interaction.editReply({ content: 'Conversation history cleared.' });
+        await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x44ff44).setTitle('✅ Conversation Cleared').setDescription('Your AI conversation history has been reset.').setTimestamp()] });
       } else if (sub === 'usage') {
         const days = interaction.options.getInteger('days') || 30;
         const data = await ai.getUsage(interaction.guildId, days);
@@ -94,11 +106,19 @@ module.exports = {
           return a;
         }, { prompts: 0, images: 0, tokens: 0 });
         await interaction.editReply({
-          content: `**AI Usage (last ${days}d)**\nPrompts: ${totals.prompts}\nImages: ${totals.images}\nTokens: ${totals.tokens.toLocaleString()}`,
+          embeds: [new EmbedBuilder()
+            .setColor(0x8b5cf6)
+            .setTitle(`🤖 AI Usage (last ${days}d)`)
+            .addFields(
+              { name: '💬 Prompts', value: totals.prompts.toLocaleString(), inline: true },
+              { name: '🖼️ Images', value: totals.images.toLocaleString(), inline: true },
+              { name: '🔢 Tokens', value: totals.tokens.toLocaleString(), inline: true },
+            )
+            .setTimestamp()],
         });
       }
     } catch (e) {
-      await interaction.editReply({ content: `AI error: ${e.message}` });
+      await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('❌ AI Error').setDescription(e.message.slice(0, 4000)).setTimestamp()] });
     }
   },
 };
