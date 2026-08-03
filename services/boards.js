@@ -27,11 +27,11 @@ async function setSkullConfig(guildId, channelId, threshold = 3, emoji = '💀',
   await supabase.from('skullboard').upsert({ guild_id: guildId, channel_id: channelId, threshold, emoji, ignored_channels: ignored });
 }
 
-async function handleReaction(message, reaction, user, type) {
+async function handleReaction(message, reaction, user, reactionType) {
   if (user.bot) return;
   const guildId = message.guild.id;
   
-  if (type === 'star') {
+  if (reactionType === 'star') {
     const cfg = await getStarConfig(message.guild.id);
     if (!cfg || cfg.ignored_channels.includes(message.channel.id)) return;
     if (reaction.emoji.name !== cfg.emoji) return;
