@@ -147,7 +147,6 @@ async function handleViolation(message, reason, overrideAction = null) {
     }
     
     // Log
-    const config = await getConfig(message.guild.id);
     if (config.log_channel) {
       const logChannel = message.guild.channels.cache.get(config.log_channel);
       if (logChannel) {
