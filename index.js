@@ -9,7 +9,7 @@ const config = require('./config/config');
 const logger = require('./services/logger');
 const { supabase, init } = require('./database/db');
 const premiumService = require('./services/premium');
-const { startBot } = require('./bot');
+const { startBot } = require('./bot/bot');
 
 const app = express();
 app.disable('x-powered-by');
