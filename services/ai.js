@@ -170,6 +170,7 @@ function startOllama() {
   // fallback: run ollama serve detached
   try {
     const child = spawn('ollama', ['serve'], { stdio: 'ignore', detached: true });
+    child.on('error', () => {});
     child.unref();
     return true;
   } catch {}
