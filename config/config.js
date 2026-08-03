@@ -20,7 +20,7 @@ const config = {
     productId: process.env.WHOP_PRODUCT_ID,
     checkoutUrl: process.env.WHOP_CHECKOUT_URL,
     webhookPort: parseInt(process.env.WEBHOOK_PORT || '14213', 10),
-    webhookPath: process.env.WEBHOOK_PATH || '/webhooks/whop',
+    webhookPath: process.env.WEBHOOK_PATH || '/webhook/whop',
     webhookUrl: process.env.WHOP_WEBHOOK_URL,
   },
   logLevel: process.env.LOG_LEVEL || 'info',

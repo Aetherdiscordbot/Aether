@@ -12,7 +12,7 @@ module.exports = {
     {
       name: 'chat',
       description: 'Chat with the AI (remembers conversation)',
-      type: 1,
+      type: 2,
       options: [
         { name: 'prompt', description: 'What to ask', type: 3, required: true },
         { name: 'system', description: 'System prompt (optional)', type: 3, required: false },
@@ -27,7 +27,7 @@ module.exports = {
     {
       name: 'image',
       description: 'Generate an image',
-      type: 1,
+      type: 2,
       options: [
         { name: 'prompt', description: 'Image description', type: 3, required: true },
         { name: 'model', description: 'Model override', type: 3, required: false, choices: [

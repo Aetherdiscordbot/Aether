@@ -43,7 +43,7 @@ module.exports = {
     {
       name: 'ai',
       description: 'Configure AI ticket helper (premium only)',
-      type: 1,
+      type: 2,
       options: [
         { name: 'enable', description: 'Enable AI helper', type: 1, options: [] },
         { name: 'disable', description: 'Disable AI helper', type: 1, options: [] },

@@ -12,7 +12,7 @@ module.exports = {
     { name: 'enable', description: 'Enable AutoMod', type: 1, options: [] },
     { name: 'disable', description: 'Disable AutoMod', type: 1, options: [] },
     { name: 'config', description: 'View current config', type: 1, options: [] },
-    { name: 'word', description: 'Add/remove banned word', type: 1, options: [
+    { name: 'word', description: 'Add/remove banned word', type: 2, options: [
       { name: 'add', description: 'Add a banned word', type: 1, options: [{ name: 'word', description: 'Word to ban', type: 3, required: true }] },
       { name: 'remove', description: 'Remove a banned word', type: 1, options: [{ name: 'word', description: 'Word to remove', type: 3, required: true }] },
       { name: 'list', description: 'List banned words', type: 1, options: [] },
