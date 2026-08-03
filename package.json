@@ -1,0 +1,29 @@
+{
+  "name": "aether",
+  "version": "1.0.0",
+  "description": "Aether - premium all-in-one Discord bot with Supabase",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:webhook": "node scripts/test-webhook.js",
+    "test:dashboard": "node scripts/test-dashboard.js",
+    "test": "node scripts/test-webhook.js && node scripts/test-dashboard.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^16.6.1",
+    "winston": "^3.19.0",
+    "@whop/sdk": "^0.0.42",
+    "axios": "^1.19.0",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "node-cron": "^3.0.3"
+  }
+}
