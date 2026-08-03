@@ -1,12 +1,8 @@
 /**
- * Ticket service — free ticket system + premium AI helper.
+ * Ticket service — free ticket system.
  */
 const { createClient } = require('@supabase/supabase-js');
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const config = require('../config/config');
-const logger = require('./logger');
-const premiumService = require('./premium');
-const ai = require('./ai');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -21,15 +17,6 @@ async function getConfig(guildId) {
 
 async function setConfig(guildId, patch) {
   await supabase.from('ticket_config').upsert({ guild_id: guildId, ...patch });
-}
-
-async function getAIConfig(guildId) {
-  const { data } = await supabase.from('ticket_ai_config').select('*').eq('guild_id', guildId).single();
-  return data || { enabled: false, system_prompt: 'You are a helpful support assistant. Be concise and professional.', model: 'openai/gpt-4o-mini', auto_reply: false, staff_only: true };
-}
-
-async function setAIConfig(guildId, patch) {
-  await supabase.from('ticket_ai_config').upsert({ guild_id: guildId, ...patch });
 }
 
 function ticketButtons(ticketId, isClaimed = false, isClosed = false) {
@@ -184,42 +171,6 @@ async function deleteTicket(channel) {
   await supabase.from('tickets').update({ status: 'deleted' }).eq('channel_id', channel.id);
 }
 
-/** Generate AI response for ticket (premium only). */
-async function generateAIResponse(guildId, channelId, recentMessages) {
-  const prem = await premiumService.isPremium(guildId);
-  if (!prem) return null;
-
-  const aiConfig = await getAIConfig(guildId);
-  if (!aiConfig.enabled) return null;
-
-  const { data: ticket } = await supabase.from('tickets').select('*').eq('channel_id', channelId).eq('status', 'open').single();
-  if (!ticket) return null;
-
-  const formatted = recentMessages.map(m => `${m.author.bot ? 'Assistant' : 'User'}: ${m.content}`).join('\n');
-  return ai.chatWithHistory(guildId, `ticket-${channelId}`, formatted, aiConfig.system_prompt, { model: aiConfig.model });
-}
-
-/** Handle new message in ticket for AI auto-reply. */
-async function handleTicketMessage(message) {
-  if (message.author.bot) return;
-  const { data: ticket } = await supabase.from('tickets').select('*').eq('channel_id', message.channel.id).eq('status', 'open').single();
-  if (!ticket) return;
-
-  const aiConfig = await getAIConfig(message.guild.id);
-  if (!aiConfig.enabled || !aiConfig.auto_reply) return;
-
-  // Only reply if last message was from user (not bot)
-  const messages = await message.channel.messages.fetch({ limit: 5 });
-  const lastBotMsg = messages.find(m => m.author.bot);
-  if (lastBotMsg && lastBotMsg.id > message.id) return; // bot already replied
-
-  const recentMessages = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
-  const response = await generateAIResponse(message.guild.id, message.channel.id, recentMessages);
-  if (response) {
-    await message.reply(response);
-  }
-}
-
 /** Create ticket panel in channel. */
 async function sendPanel(guild, channel) {
   const cfg = await getConfig(guild.id);
@@ -238,26 +189,8 @@ async function sendPanel(guild, channel) {
   await channel.send({ embeds: [embed], components: [row] });
 }
 
-async function getConfig(guildId) {
-  const { data } = await supabase.from('ticket_config').select('*').eq('guild_id', guildId).single();
-  return data;
-}
-
-async function setConfig(guildId, patch) {
-  await supabase.from('ticket_config').upsert({ guild_id: guildId, ...patch });
-}
-
-async function getAIConfig(guildId) {
-  const { data } = await supabase.from('ticket_ai_config').select('*').eq('guild_id', guildId).single();
-  return data || { enabled: false, system_prompt: 'You are a helpful support assistant. Be concise and professional.', model: 'openai/gpt-4o-mini', auto_reply: false, staff_only: true };
-}
-
-async function setAIConfig(guildId, patch) {
-  await supabase.from('ticket_ai_config').upsert({ guild_id: guildId, ...patch });
-}
-
 module.exports = {
-  getConfig, setConfig, getAIConfig, setAIConfig,
+  getConfig, setConfig,
   createTicket, closeTicket, claimTicket, deleteTicket,
-  sendPanel, sendTicketEmbed, handleTicketMessage,
+  sendPanel, sendTicketEmbed,
 };

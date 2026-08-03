@@ -19,8 +19,6 @@ const giveaways = require('../services/giveaways');
 const automod = require('../services/automod');
 const customCmd = require('../services/customCommands');
 const tickets = require('../services/tickets');
-const aiModeration = require('../services/aiModeration');
-const ai = require('../services/ai');
 const embedTemplates = require('../services/embedTemplates');
 const economy = require('../services/economy');
 
@@ -339,12 +337,6 @@ async function startBot() {
 
     // AutoMod
     await automod.checkMessage(message);
-
-    // AI Moderation (premium)
-    const aiMod = await aiModeration.moderateContent(message);
-    if (aiMod?.action !== 'none') {
-      // Handle AI moderation action
-    }
   });
 
   // ── Voice state update (voice XP) ──
@@ -486,19 +478,10 @@ async function startBot() {
     }
   }, 30000);
 
-  // // ── AI auto-reply for tickets ──
-  // client.on('messageCreate', async message => {
-  //   if (message.author.bot || !message.guild) return;
-  //   await tickets.handleTicketMessage(message);
-  // });
-
   client.once('clientReady', () => {
     logger.info(`Logged in as ${client.user.tag} (${client.user.id})`);
     cleanupGuildCommands(client);
   });
-
-  // Start the local AI (Ollama) and download the model BEFORE the bot goes online
-  await ai.ensureLocalModel();
 
   await client.login(config.token);
 }
