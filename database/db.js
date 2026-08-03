@@ -26,12 +26,21 @@ async function migrate(migration) {
         logger.warn(`exec_sql RPC not available, skipping migration ${migration.version} (${migration.name}). Run migrations manually in Supabase SQL editor.`);
         return;
       }
+      // If table/column doesn't exist, log warning and skip
+      if (error.message.includes('does not exist') || error.code === '42703' || error.code === '42P01') {
+        logger.warn(`Migration ${migration.version} (${migration.name}) skipped: ${error.message}. Run migrations manually in Supabase SQL editor.`);
+        return;
+      }
       throw error;
     }
     logger.info(`Migration ${migration.version} applied (${migration.name})`);
   } catch (e) {
     if (e.message?.includes('Could not find the function') || e.code === '42883') {
       logger.warn(`exec_sql RPC not available, skipping migration ${migration.version} (${migration.name}). Run migrations manually in Supabase SQL editor.`);
+      return;
+    }
+    if (e.message?.includes('does not exist') || e.code === '42703' || e.code === '42P01') {
+      logger.warn(`Migration ${migration.version} (${migration.name}) skipped: ${e.message}. Run migrations manually in Supabase SQL editor.`);
       return;
     }
     logger.error(`Migration ${migration.version} failed: ${e.message}`);
@@ -94,7 +103,12 @@ async function init() {
     
     if (applied) continue;
     
-    await migrate(migration);
+    try {
+      await migrate(migration);
+    } catch (e) {
+      logger.error(`Migration ${migration.version} failed, continuing: ${e.message}`);
+      continue;
+    }
     
     if (hasExecSql) {
       try {
