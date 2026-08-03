@@ -24,6 +24,7 @@
     "axios": "^1.19.0",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "chalk": "^4.1.2"
   }
 }
