@@ -32,20 +32,28 @@ function checkRateLimit(userId, type) {
 async function trackUsage(guildId, type, tokens = 0) {
   const day = new Date().toISOString().slice(0, 10);
   const col = type === 'chat' ? 'prompts' : 'images';
-  await supabase.rpc('increment_ai_usage', {
-    p_guild_id: guildId,
-    p_day: day,
-    p_col: col,
-    p_tokens: tokens,
-  }).catch(() => {
+  try {
+    await supabase.rpc('increment_ai_usage', {
+      p_guild_id: guildId,
+      p_day: day,
+      p_col: col,
+      p_tokens: tokens,
+    });
+  } catch {
     // fallback: upsert manually
-    supabase.from('ai_usage').upsert({
+    const { data: existing } = await supabase
+      .from('ai_usage')
+      .select(`${col}, tokens`)
+      .eq('guild_id', guildId)
+      .eq('day', day)
+      .single();
+    await supabase.from('ai_usage').upsert({
       guild_id: guildId,
       day: day,
-      [col]: supabase.rpc('coalesce', { val: supabase.from('ai_usage').select(col).eq('guild_id', guildId).eq('day', day).single(), def: 0 }) + 1,
-      tokens: supabase.rpc('coalesce', { val: supabase.from('ai_usage').select('tokens').eq('guild_id', guildId).eq('day', day).single(), def: 0 }) + tokens,
+      [col]: (existing?.[col] || 0) + 1,
+      tokens: (existing?.tokens || 0) + tokens,
     });
-  });
+  }
 }
 
 async function getHistory(guildId, userId) {
