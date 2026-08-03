@@ -7,7 +7,8 @@
 set -uo pipefail
 
 echo "==> Installing Ollama..."
-if command -v ollama >/dev/null 2>&1; then
+OLLAMA_BIN=/home/container/ollama/bin/ollama
+if [[ -x $OLLAMA_BIN ]]; then
   echo "    ollama already installed."
 else
   arch=$(uname -m)
@@ -16,21 +17,22 @@ else
     aarch64|arm64) oat="ollama-linux-arm64" ;;
     *) echo "Unsupported architecture: $arch" ; exit 1 ;;
   esac
-  curl -fsSL "https://ollama.com/download/${oat}.tgz?version=0.13.5" | tar -xzf - -C /usr/local
-  echo "    Installed to /usr/local/bin/ollama"
+  mkdir -p /home/container/ollama
+  curl -fsSL "https://ollama.com/download/${oat}.tgz?version=0.13.5" | tar -xzf - -C /home/container/ollama
+  echo "    Installed to $OLLAMA_BIN"
 fi
 
 echo "==> Ensuring Ollama is running..."
 if ! curl -fsS http://localhost:11434/api/version >/dev/null 2>&1; then
-  (ollama serve >/tmp/ollama.log 2>&1 &)
+  ($OLLAMA_BIN serve >/tmp/ollama.log 2>&1 &)
 fi
 until curl -fsS http://localhost:11434/api/version >/dev/null 2>&1; do sleep 2; done
 
 echo "==> Downloading Gemma 3 4B (this can take a few minutes)..."
-ollama pull gemma3:4b
+$OLLAMA_BIN pull gemma3:4b
 
 echo "==> Verifying..."
-ollama run gemma3:4b "Reply with exactly: Aether AI ready"
+$OLLAMA_BIN run gemma3:4b "Reply with exactly: Aether AI ready"
 
 echo ""
 echo "Done. Ollama is running on http://localhost:11434"
